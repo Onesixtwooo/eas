@@ -1,0 +1,29 @@
+@import "tailwindcss";
+@source "../views/**/*.blade.php";
+@source "../../app/**/*.php";
+@theme { --color-navy: #123A63; --color-brand: #245B8E; --color-accent: #B3262E; }
+@layer base { body { @apply bg-[#F5F7FA] text-slate-700 antialiased; } input,select,textarea { @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-[#245B8E] focus:ring-2 focus:ring-blue-100; } label { @apply mb-1.5 block text-sm font-semibold text-slate-700; } }
+[x-cloak] { display: none !important; }
+.print-sheet { box-sizing:border-box; width:5.5in; min-height:8.5in; }
+@page { size:5.5in 8.5in; margin:0.3in; }
+@media print {
+    .no-print { display:none!important; }
+    html,body { background:white!important; margin:0!important; padding:0!important; }
+    body > div, main { margin:0!important; padding:0!important; }
+    .print-sheet {
+        width:100%!important;
+        min-height:0!important;
+        box-shadow:none!important;
+        border:0!important;
+        margin:0!important;
+        padding:0!important;
+    }
+}
+@media screen and (max-width:700px) {
+    .print-sheet { width:100%; min-height:auto; }
+}
+
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+}

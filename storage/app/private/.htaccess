@@ -1,0 +1,19 @@
+# Defense in depth for private uploads on Apache and LiteSpeed.
+# Laravel reads these files from disk through authorized controllers;
+# the web server must never serve or execute them directly.
+
+Options -Indexes -ExecCGI
+
+<IfModule mod_mime.c>
+    RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml .pht .phar .cgi .pl .py .sh
+    RemoveType .php .php3 .php4 .php5 .php7 .php8 .phtml .pht .phar .cgi .pl .py .sh
+</IfModule>
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
