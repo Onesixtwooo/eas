@@ -12,4 +12,5 @@ class InstructorAssignment extends Model
     public function faculty() { return $this->belongsTo(Faculty::class); }
     public function course() { return $this->belongsTo(Course::class); }
     public function subject() { return $this->belongsTo(Subject::class); }
+    public function section() { return $this->belongsTo(Section::class); }
 }

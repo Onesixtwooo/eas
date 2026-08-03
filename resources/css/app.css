@@ -1,8 +1,37 @@
 @import "tailwindcss";
 @source "../views/**/*.blade.php";
 @source "../../app/**/*.php";
-@theme { --color-navy: #123A63; --color-brand: #245B8E; --color-accent: #B3262E; }
+@theme {
+    --color-navy: #14532d;
+    --color-brand: #15803d;
+    --color-accent: #16a34a;
+    --color-blue-50: #f0fdf4;
+    --color-blue-100: #dcfce7;
+    --color-blue-200: #bbf7d0;
+    --color-blue-300: #86efac;
+    --color-blue-400: #4ade80;
+    --color-blue-500: #22c55e;
+    --color-blue-600: #16a34a;
+    --color-blue-700: #15803d;
+    --color-blue-800: #166534;
+    --color-blue-900: #14532d;
+    --color-blue-950: #052e16;
+}
 @layer base { body { @apply bg-[#F5F7FA] text-slate-700 antialiased; } input,select,textarea { @apply w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-[#245B8E] focus:ring-2 focus:ring-blue-100; } label { @apply mb-1.5 block text-sm font-semibold text-slate-700; } }
+
+/* Keep legacy utility names while applying the system-wide green identity. */
+@layer utilities {
+    .bg-\[\#123A63\] { background-color: #14532d; }
+    .bg-\[\#245B8E\] { background-color: #15803d; }
+    .text-\[\#123A63\] { color: #14532d; }
+    .text-\[\#245B8E\] { color: #15803d; }
+    .border-\[\#123A63\] { border-color: #14532d; }
+    .hover\:bg-\[\#123A63\]:hover { background-color: #14532d; }
+    .hover\:bg-\[\#245B8E\]:hover { background-color: #15803d; }
+    .hover\:bg-\[\#0d2d4e\]:hover { background-color: #166534; }
+    .hover\:border-\[\#245B8E\]:hover { border-color: #15803d; }
+    .focus\:border-\[\#245B8E\]:focus { border-color: #15803d; }
+}
 [x-cloak] { display: none !important; }
 .print-sheet { box-sizing:border-box; width:5.5in; min-height:8.5in; }
 @page { size:5.5in 8.5in; margin:0.3in; }

@@ -39,6 +39,7 @@ class StudentController extends Controller
                 'password' => $request->password,
                 'role' => 'student',
                 'is_active' => true,
+                'registration_verified_at' => now(),
             ]);
             Student::create([
                 'user_id' => $user->id,
@@ -69,6 +70,7 @@ class StudentController extends Controller
             ->when($request->filled('section_id'), fn ($query) => $query->where('section_id', $request->integer('section_id')))
             ->when($request->status === 'active', fn ($query) => $query->whereHas('user', fn ($user) => $user->where('is_active', true)))
             ->when($request->status === 'inactive', fn ($query) => $query->whereHas('user', fn ($user) => $user->where('is_active', false)))
+            ->when($request->status === 'pending', fn ($query) => $query->whereHas('user', fn ($user) => $user->whereNull('registration_verified_at')))
             ->latest()
             ->paginate(15)
             ->withQueryString();
@@ -83,6 +85,7 @@ class StudentController extends Controller
             'total' => Student::count(),
             'active' => Student::whereHas('user', fn ($query) => $query->where('is_active', true))->count(),
             'inactive' => Student::whereHas('user', fn ($query) => $query->where('is_active', false))->count(),
+            'pending' => Student::whereHas('user', fn ($query) => $query->whereNull('registration_verified_at'))->count(),
         ];
 
         return view('admin.students.index', compact('students', 'sections', 'summary'));
@@ -92,8 +95,40 @@ class StudentController extends Controller
     {
         $student->load(['user', 'course', 'section']);
         $student->loadCount('requests');
+        $sections = Section::where('course_id', $student->course_id)
+            ->where('is_active', true)
+            ->orderBy('year_level')
+            ->orderBy('name')
+            ->get();
 
-        return view('admin.students.show', compact('student'));
+        return view('admin.students.show', compact('student', 'sections'));
+    }
+
+    public function updateAcademicPlacement(Request $request, Student $student)
+    {
+        $data = $request->validate([
+            'year_level' => ['required', 'integer', 'between:1,5'],
+            'section_id' => ['required', 'integer', 'exists:sections,id'],
+        ]);
+
+        $section = Section::whereKey($data['section_id'])
+            ->where('course_id', $student->course_id)
+            ->where('year_level', $data['year_level'])
+            ->where('is_active', true)
+            ->first();
+
+        if (! $section) {
+            return back()->withErrors([
+                'section_id' => 'Select an active section for the chosen year level and the student’s current course.',
+            ])->withInput();
+        }
+
+        $student->update([
+            'year_level' => $section->year_level,
+            'section_id' => $section->id,
+        ]);
+
+        return back()->with('success', 'Student year level and section updated successfully.');
     }
 
     public function toggleStatus(Student $student)
@@ -104,6 +139,15 @@ class StudentController extends Controller
             'success',
             $student->user->is_active ? 'Student account activated.' : 'Student account deactivated.'
         );
+    }
+
+    public function verify(Student $student)
+    {
+        if (! $student->user->registration_verified_at) {
+            $student->user->update(['registration_verified_at' => now()]);
+        }
+
+        return back()->with('success', 'Student registration verified. The student can now sign in.');
     }
 
     public function assessmentForm(Student $student)

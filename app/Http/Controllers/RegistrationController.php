@@ -8,7 +8,6 @@ use App\Models\User;
 use App\Models\Course;
 use App\Exceptions\VirusScanException;
 use App\Services\VirusScanner;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
@@ -69,6 +68,7 @@ class RegistrationController extends Controller
                     'password' => $request->input('password'),
                     'role' => 'student',
                     'is_active' => true,
+                    'registration_verified_at' => null,
                 ]);
                 Student::create([
                     'user_id' => $user->id,
@@ -88,10 +88,7 @@ class RegistrationController extends Controller
             throw $exception;
         }
 
-        Auth::login($user);
-        $request->session()->regenerate();
-
-        return redirect()->route('dashboard')->with('success', 'Your student account has been created successfully.');
+        return redirect()->route('login')->with('success', 'Registration submitted. Please wait for an administrator to verify your account before signing in.');
     }
 
     private function storeSanitizedAssessmentForm($file): string

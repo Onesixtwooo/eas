@@ -30,9 +30,11 @@ class StudentRegistrationTest extends TestCase
 
         $this->post(route('register.store'), $this->registrationData([
             'assessment_form' => $form,
-        ]))->assertRedirect(route('dashboard'));
+        ]))->assertRedirect(route('login'));
 
         $student = Student::firstOrFail();
+        $this->assertNull($student->user->registration_verified_at);
+        $this->assertGuest();
         Storage::disk('local')->assertExists($student->assessment_form_path);
         $this->assertSame('assessment.png', $student->assessment_form_name);
 
@@ -40,6 +42,30 @@ class StudentRegistrationTest extends TestCase
         $this->actingAs($admin)
             ->get(route('admin.students.assessment-form', $student))
             ->assertOk();
+    }
+
+    public function test_pending_student_cannot_login_until_an_admin_verifies_registration(): void
+    {
+        Storage::fake('local');
+        Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
+
+        $this->post(route('register.store'), $this->registrationData([
+            'assessment_form' => UploadedFile::fake()->image('assessment.png', 200, 200),
+        ]));
+
+        $student = Student::firstOrFail();
+        $this->post(route('login.attempt'), ['email' => 'student@example.com', 'password' => 'secure-password'])
+            ->assertSessionHasErrors('email');
+        $this->assertGuest();
+
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $this->actingAs($admin)->patch(route('admin.students.verify', $student))
+            ->assertSessionHas('success');
+
+        auth()->logout();
+        $this->post(route('login.attempt'), ['email' => 'student@example.com', 'password' => 'secure-password'])
+            ->assertRedirect(route('dashboard'));
+        $this->assertAuthenticatedAs($student->user->fresh());
     }
 
     public function test_assessment_form_with_embedded_php_is_rejected(): void

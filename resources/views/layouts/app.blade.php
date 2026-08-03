@@ -11,7 +11,7 @@
 <body x-data="{ menu: false }" class="min-h-screen">
     <aside :class="menu ? 'translate-x-0' : '-translate-x-full'" class="no-print fixed inset-y-0 left-0 z-40 w-72 bg-[#123A63] text-white transition lg:translate-x-0">
         <div class="flex h-20 items-center gap-3 border-b border-white/10 px-6">
-            <div class="grid size-11 place-items-center rounded-xl bg-white font-black text-[#123A63]">O</div>
+            <img src="{{ asset('images.jpg') }}" alt="OLSHCO logo" class="size-11 rounded-full bg-white object-cover">
             <div><b class="block">OLSHCO EAS</b><span class="text-xs text-blue-200">Academic Services Portal</span></div>
         </div>
         <nav class="h-[calc(100vh-5rem)] space-y-1 overflow-y-auto p-4 pb-24">

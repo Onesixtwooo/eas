@@ -14,9 +14,10 @@
     </a>
 </div>
 
-<div class="mt-7 grid gap-4 sm:grid-cols-3">
+<div class="mt-7 grid gap-4 sm:grid-cols-4">
     @foreach([
         ['All Students', $summary['total'], 'bg-blue-50 text-blue-700'],
+        ['Pending Verification', $summary['pending'], 'bg-amber-50 text-amber-700'],
         ['Active Accounts', $summary['active'], 'bg-emerald-50 text-emerald-700'],
         ['Inactive Accounts', $summary['inactive'], 'bg-red-50 text-red-700'],
     ] as [$label, $count, $color])
@@ -43,6 +44,7 @@
         <option value="">All statuses</option>
         <option value="active" @selected(request('status') === 'active')>Active</option>
         <option value="inactive" @selected(request('status') === 'inactive')>Inactive</option>
+        <option value="pending" @selected(request('status') === 'pending')>Pending verification</option>
     </select>
     <div class="flex gap-2">
         <button class="rounded-xl bg-[#123A63] px-6 font-semibold text-white">Filter</button>
@@ -87,11 +89,21 @@
                         <td class="px-5 py-4"><b>{{ $student->course->code }}</b><p class="text-xs text-slate-500">Year {{ $student->year_level }}, Section {{ $student->section->name }}</p></td>
                         <td class="max-w-xs truncate px-5 py-4 text-slate-600">{{ $student->address ?: 'Not provided' }}</td>
                         <td class="px-5 py-4">
-                            <span class="rounded-full px-3 py-1 text-xs font-bold {{ $student->user->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $student->user->is_active ? 'Active' : 'Inactive' }}</span>
+                            @if(! $student->user->registration_verified_at)
+                                <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">Pending verification</span>
+                            @else
+                                <span class="rounded-full px-3 py-1 text-xs font-bold {{ $student->user->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $student->user->is_active ? 'Active' : 'Inactive' }}</span>
+                            @endif
                         </td>
                         <td class="px-5 py-4">
                             <div class="flex justify-end gap-2">
                                 <a href="{{ route('admin.students.show', $student) }}" class="rounded-lg border px-3 py-2 font-semibold text-[#245B8E] hover:bg-blue-50">View</a>
+                                @if(! $student->user->registration_verified_at)
+                                    <form method="post" action="{{ route('admin.students.verify', $student) }}" onsubmit="return confirm('Verify this student registration and allow login?')">
+                                        @csrf @method('PATCH')
+                                        <button class="rounded-lg bg-emerald-600 px-3 py-2 font-semibold text-white hover:bg-emerald-700">Verify</button>
+                                    </form>
+                                @endif
                                 <form method="post" action="{{ route('admin.students.status', $student) }}" onsubmit="return confirm('{{ $student->user->is_active ? 'Deactivate' : 'Activate' }} this student account?')">
                                     @csrf @method('PATCH')
                                     <button class="rounded-lg px-3 py-2 font-semibold {{ $student->user->is_active ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' }}">{{ $student->user->is_active ? 'Deactivate' : 'Activate' }}</button>

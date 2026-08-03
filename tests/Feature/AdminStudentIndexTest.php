@@ -110,4 +110,50 @@ class AdminStudentIndexTest extends TestCase
         $this->assertDatabaseMissing('students', ['id' => $student->id]);
         $this->assertDatabaseMissing('excuse_requests', ['id' => $excuseRequest->id]);
     }
+
+    public function test_admin_can_update_only_a_students_year_level_and_section(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $studentUser = User::factory()->create(['role' => 'student', 'is_active' => true]);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
+        $oldSection = Section::create(['course_id' => $course->id, 'name' => 'A', 'year_level' => 2]);
+        $newSection = Section::create(['course_id' => $course->id, 'name' => 'B', 'year_level' => 3]);
+        $student = Student::create([
+            'user_id' => $studentUser->id,
+            'student_number' => '26-1001',
+            'course_id' => $course->id,
+            'section_id' => $oldSection->id,
+            'year_level' => 2,
+        ]);
+
+        $this->actingAs($admin)
+            ->patch(route('admin.students.academic-placement.update', $student), [
+                'year_level' => 3,
+                'section_id' => $newSection->id,
+            ])
+            ->assertSessionHas('success');
+
+        $student->refresh();
+        $this->assertSame(3, $student->year_level);
+        $this->assertSame($newSection->id, $student->section_id);
+        $this->assertSame($course->id, $student->course_id);
+        $this->assertSame('26-1001', $student->student_number);
+    }
+
+    public function test_admin_cannot_assign_a_section_from_another_course(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $studentUser = User::factory()->create(['role' => 'student', 'is_active' => true]);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
+        $otherCourse = Course::create(['code' => 'BSCS', 'name' => 'BS Computer Science']);
+        $currentSection = Section::create(['course_id' => $course->id, 'name' => 'A', 'year_level' => 2]);
+        $invalidSection = Section::create(['course_id' => $otherCourse->id, 'name' => 'B', 'year_level' => 3]);
+        $student = Student::create(['user_id' => $studentUser->id, 'student_number' => '26-1002', 'course_id' => $course->id, 'section_id' => $currentSection->id, 'year_level' => 2]);
+
+        $this->actingAs($admin)
+            ->patch(route('admin.students.academic-placement.update', $student), ['year_level' => 3, 'section_id' => $invalidSection->id])
+            ->assertSessionHasErrors('section_id');
+
+        $this->assertSame($currentSection->id, $student->fresh()->section_id);
+    }
 }

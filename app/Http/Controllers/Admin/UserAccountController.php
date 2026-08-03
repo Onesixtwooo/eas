@@ -3,9 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Mail\AdministratorAccountCreated;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UserAccountController extends Controller
@@ -48,12 +52,23 @@ class UserAccountController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
         ]);
 
-        User::create($data + ['role' => 'admin', 'is_active' => true]);
+        $password = Str::random(12);
 
-        return redirect()->route('admin.accounts.index')->with('success', 'Administrator account created.');
+        DB::transaction(function () use ($data, $password) {
+            $administrator = User::create($data + [
+                'password' => $password,
+                'role' => 'admin',
+                'is_active' => true,
+            ]);
+
+            Mail::to($administrator->email)->send(
+                new AdministratorAccountCreated($administrator, $password)
+            );
+        });
+
+        return redirect()->route('admin.accounts.index')->with('success', 'Administrator account created and login details emailed.');
     }
 
     public function update(Request $request, User $account)

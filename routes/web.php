@@ -22,6 +22,8 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [RegistrationController::class, 'store'])->name('register.store');
     Route::get('/forgot-password', [AuthController::class, 'forgot'])->name('password.request');
     Route::post('/forgot-password', [AuthController::class, 'emailReset'])->name('password.email');
+    Route::get('/reset-password/{token}', [AuthController::class, 'reset'])->name('password.reset');
+    Route::post('/reset-password', [AuthController::class, 'updatePassword'])->name('password.update');
 });
 Route::get('/verify/{reference}', [VerificationController::class, 'show'])->name('verify');
 Route::middleware('auth')->group(function () {
@@ -32,7 +34,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/requests/create', [ExcuseRequestController::class, 'create'])->name('requests.create');
         Route::post('/requests', [ExcuseRequestController::class, 'store'])->name('requests.store');
         Route::post('/requests/{excuseRequest}/submit', [ExcuseRequestController::class, 'submit'])->name('requests.submit');
+        Route::patch('/requests/{excuseRequest}/attachment', [ExcuseRequestController::class, 'updateAttachment'])->name('requests.attachment.update');
     });
+    Route::get('/request-documents/{document}', [ExcuseRequestController::class, 'document'])->name('requests.documents.show');
     Route::get('/requests/{excuseRequest}', [ExcuseRequestController::class, 'show'])->name('requests.show');
     Route::get('/requests/{excuseRequest}/slip', [ExcuseRequestController::class, 'slip'])->name('requests.slip');
     Route::post('/requests/{excuseRequest}/review', [WorkflowController::class, 'review'])->middleware('role:admin,program_head')->name('requests.review');
@@ -56,6 +60,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/students/{student}', [AdminStudentController::class, 'show'])->name('students.show');
         Route::get('/students/{student}/assessment-form', [AdminStudentController::class, 'assessmentForm'])->name('students.assessment-form');
         Route::patch('/students/{student}/status', [AdminStudentController::class, 'toggleStatus'])->name('students.status');
+        Route::patch('/students/{student}/academic-placement', [AdminStudentController::class, 'updateAcademicPlacement'])->name('students.academic-placement.update');
+        Route::patch('/students/{student}/verify', [AdminStudentController::class, 'verify'])->name('students.verify');
         Route::delete('/students/{student}', [AdminStudentController::class, 'destroy'])->name('students.destroy');
         Route::get('/instructors/create', [InstructorController::class, 'create'])->name('instructors.create');
         Route::post('/instructors', [InstructorController::class, 'store'])->name('instructors.store');

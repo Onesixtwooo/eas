@@ -27,7 +27,7 @@
             </div>
         </section>
         <label class="flex items-start gap-3 rounded-2xl border bg-white p-5 font-normal"><input type="checkbox" name="declaration" value="1" class="mt-1 size-4 w-auto"><span>I certify that the information provided in this request is true and correct.</span></label>
-        <div class="flex flex-wrap justify-end gap-3"><a href="{{ route('requests.index') }}" class="rounded-xl border bg-white px-6 py-3 font-semibold">Cancel</a><button name="intent" value="draft" class="rounded-xl border border-[#123A63] px-6 py-3 font-semibold text-[#123A63]">Save as Draft</button><button name="intent" value="submit" class="rounded-xl bg-[#B3262E] px-6 py-3 font-semibold text-white">Submit Request</button></div>
+        <div class="flex flex-wrap justify-end gap-3"><a href="{{ route('requests.index') }}" class="rounded-xl border bg-white px-6 py-3 font-semibold">Cancel</a><button name="intent" value="draft" class="rounded-xl border border-[#123A63] px-6 py-3 font-semibold text-[#123A63]">Save as Draft</button><button name="intent" value="submit" class="rounded-xl bg-emerald-600 px-6 py-3 font-semibold text-white hover:bg-emerald-700">Submit Request</button></div>
     </form>
 </div>
 @endsection

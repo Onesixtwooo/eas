@@ -13,7 +13,11 @@
             <p class="mt-1 text-slate-500">{{ $student->student_number }}</p>
         </div>
     </div>
-    <span class="w-fit rounded-full px-4 py-2 text-sm font-bold {{ $student->user->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $student->user->is_active ? 'Active Account' : 'Inactive Account' }}</span>
+    @if(! $student->user->registration_verified_at)
+        <span class="w-fit rounded-full bg-amber-100 px-4 py-2 text-sm font-bold text-amber-800">Pending Verification</span>
+    @else
+        <span class="w-fit rounded-full px-4 py-2 text-sm font-bold {{ $student->user->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $student->user->is_active ? 'Active Account' : 'Inactive Account' }}</span>
+    @endif
 </div>
 
 <div class="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -35,6 +39,41 @@
     </section>
 
     <aside class="space-y-5">
+        <form method="post" action="{{ route('admin.students.academic-placement.update', $student) }}" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm" x-data="{ year: '{{ old('year_level', $student->year_level) }}' }">
+            @csrf @method('PATCH')
+            <h2 class="font-bold text-slate-900">Academic placement</h2>
+            <p class="mt-2 text-sm text-slate-500">Update only this student’s year level and section.</p>
+            <div class="mt-5">
+                <label for="year_level">Year level</label>
+                <select id="year_level" name="year_level" x-model="year" required>
+                    @foreach(range(1, 5) as $year)
+                        <option value="{{ $year }}">Year {{ $year }}</option>
+                    @endforeach
+                </select>
+                @error('year_level')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <div class="mt-4">
+                <label for="section_id">Section</label>
+                <select id="section_id" name="section_id" required>
+                    <option value="">Select section</option>
+                    @foreach($sections as $section)
+                        <option value="{{ $section->id }}" x-show="year == '{{ $section->year_level }}'" @selected(old('section_id', $student->section_id) == $section->id)>
+                            Year {{ $section->year_level }} — Section {{ $section->name }}
+                        </option>
+                    @endforeach
+                </select>
+                @error('section_id')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <button class="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700">Save Year & Section</button>
+        </form>
+        @if(! $student->user->registration_verified_at)
+            <form method="post" action="{{ route('admin.students.verify', $student) }}" onsubmit="return confirm('Confirm this student registration and allow portal login?')" class="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+                @csrf @method('PATCH')
+                <h2 class="font-bold text-amber-900">Verification required</h2>
+                <p class="mt-2 text-sm text-amber-800">Review the student's information and assessment form before confirming the account.</p>
+                <button class="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700">Verify Student Registration</button>
+            </form>
+        @endif
         <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 class="font-bold text-slate-900">Assessment form</h2>
             <p class="mt-2 text-sm text-slate-500">Use this document to verify the student's enrollment information.</p>

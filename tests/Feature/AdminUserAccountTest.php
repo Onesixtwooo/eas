@@ -2,8 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Mail\AdministratorAccountCreated;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class AdminUserAccountTest extends TestCase
@@ -103,14 +106,13 @@ class AdminUserAccountTest extends TestCase
 
     public function test_admin_can_create_another_administrator(): void
     {
+        Mail::fake();
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
 
         $this->actingAs($admin)
             ->post(route('admin.accounts.store'), [
                 'name' => 'Second Administrator',
                 'email' => 'second.admin@example.com',
-                'password' => 'secure-password',
-                'password_confirmation' => 'secure-password',
             ])
             ->assertRedirect(route('admin.accounts.index'));
 
@@ -120,6 +122,25 @@ class AdminUserAccountTest extends TestCase
             'role' => 'admin',
             'is_active' => true,
         ]);
+
+        $administrator = User::where('email', 'second.admin@example.com')->firstOrFail();
+        Mail::assertSent(AdministratorAccountCreated::class, function ($mail) use ($administrator) {
+            return $mail->hasTo($administrator->email)
+                && strlen($mail->temporaryPassword) === 12
+                && Hash::check($mail->temporaryPassword, $administrator->password);
+        });
+    }
+
+    public function test_create_administrator_form_does_not_show_password_fields(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.accounts.create'))
+            ->assertOk()
+            ->assertDontSee('name="password"', false)
+            ->assertDontSee('name="password_confirmation"', false)
+            ->assertSee('generated password will be emailed');
     }
 
     public function test_admin_can_delete_an_account_but_not_their_own(): void

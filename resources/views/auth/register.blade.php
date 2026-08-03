@@ -9,15 +9,15 @@
 <body class="min-h-screen bg-[#F5F7FA]">
 <main class="grid min-h-screen lg:grid-cols-[.8fr_1.2fr]">
     <section class="hidden flex-col justify-between bg-[#123A63] p-12 text-white lg:flex">
-        <a href="{{ route('login') }}" class="flex items-center gap-3"><span class="grid size-12 place-items-center rounded-xl bg-white text-xl font-black text-[#123A63]">O</span><b>OLSHCO EAS</b></a>
+        <a href="{{ route('login') }}" class="flex items-center gap-3"><img src="{{ asset('images.jpg') }}" alt="OLSHCO logo" class="size-12 rounded-full bg-white object-cover"><span><b class="block">OLSHCO EAS</b><span class="text-xs text-blue-200">College Department</span></span></a>
         <div><p class="text-sm font-semibold uppercase tracking-[.25em] text-blue-200">Student Portal</p><h1 class="mt-4 text-4xl font-bold leading-tight">Create your student account.</h1><p class="mt-5 max-w-md leading-relaxed text-blue-100">Submit excuse requests, follow their progress, and access approved admission slips online.</p></div>
-        <p class="text-sm text-blue-200">Our Lady of the Sacred Heart College of Guimba, Inc.</p>
+        <span></span>
     </section>
     <section class="flex items-center justify-center p-5 sm:p-8">
         <div class="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-xl sm:p-9">
             <a href="{{ route('login') }}" class="text-sm font-semibold text-[#245B8E]">← Back to sign in</a>
             <h2 class="mt-4 text-3xl font-bold text-slate-900">Student registration</h2>
-            <p class="mt-2 text-slate-500">Enter your official student information below.</p>
+            <p class="mt-2 text-slate-500">Enter your official student information below. An administrator must verify your registration before you can sign in.</p>
             @if($errors->any())<div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><b>Please correct the following:</b><ul class="mt-2 list-inside list-disc">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
             <form method="post" action="{{ route('register.store') }}" enctype="multipart/form-data" class="mt-7 grid gap-5 sm:grid-cols-2">
                 @csrf
