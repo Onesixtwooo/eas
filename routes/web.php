@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExcuseRequestController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RegistrationController;
+use App\Http\Controllers\StudentEmailVerificationController;
 use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\WorkflowController;
 use Illuminate\Support\Facades\Route;
@@ -20,6 +21,10 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthController::class, 'authenticate'])->name('login.attempt');
     Route::get('/register', [RegistrationController::class, 'create'])->name('register');
     Route::post('/register', [RegistrationController::class, 'store'])->name('register.store');
+    Route::post('/register/send-otp', [RegistrationController::class, 'sendOtp'])->middleware('throttle:2,1')->name('register.send-otp');
+    Route::get('/register/verify-email', [StudentEmailVerificationController::class, 'show'])->name('register.verify-email');
+    Route::post('/register/verify-email', [StudentEmailVerificationController::class, 'verify'])->middleware('throttle:10,1')->name('register.verify-email.store');
+    Route::post('/register/verify-email/resend', [StudentEmailVerificationController::class, 'resend'])->middleware('throttle:2,1')->name('register.verify-email.resend');
     Route::get('/forgot-password', [AuthController::class, 'forgot'])->name('password.request');
     Route::post('/forgot-password', [AuthController::class, 'emailReset'])->name('password.email');
     Route::get('/reset-password/{token}', [AuthController::class, 'reset'])->name('password.reset');

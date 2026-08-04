@@ -17,10 +17,23 @@
         <div class="w-full max-w-2xl rounded-3xl border border-slate-200 bg-white p-6 shadow-xl sm:p-9">
             <a href="{{ route('login') }}" class="text-sm font-semibold text-[#245B8E]">← Back to sign in</a>
             <h2 class="mt-4 text-3xl font-bold text-slate-900">Student registration</h2>
-            <p class="mt-2 text-slate-500">Enter your official student information below. An administrator must verify your registration before you can sign in.</p>
+            <p class="mt-2 text-slate-500">Enter your official student information below. We will verify your email with a one-time code, then an administrator must approve your registration before you can sign in.</p>
             @if($errors->any())<div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><b>Please correct the following:</b><ul class="mt-2 list-inside list-disc">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
             <form method="post" action="{{ route('register.store') }}" enctype="multipart/form-data" class="mt-7 grid gap-5 sm:grid-cols-2">
                 @csrf
+                <div class="sm:col-span-2">
+                    <label for="email">Email address <span class="text-red-600">*</span></label>
+                    <div class="mt-1 flex gap-3">
+                        <input id="email" type="email" name="email" value="{{ old('email') }}" required autocomplete="email" placeholder="student@olshco.edu.ph" class="min-w-0 flex-1">
+                        <button id="send-otp" type="button" class="shrink-0 rounded-xl bg-[#245B8E] px-5 font-semibold text-white hover:bg-[#123A63]">Send OTP</button>
+                    </div>
+                    <p id="otp-status" class="mt-2 hidden text-sm"></p>
+                </div>
+                <div class="sm:col-span-2">
+                    <label for="otp">Email OTP <span class="text-red-600">*</span></label>
+                    <input id="otp" name="otp" value="{{ old('otp') }}" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required placeholder="Enter the 6-digit code">
+                    @error('otp')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
                 <div><label for="student_number">Student ID <span class="text-red-600">*</span></label><input id="student_number" name="student_number" value="{{ old('student_number') }}" required placeholder="e.g. 2026-0001"></div>
                 <div><label for="first_name">First name <span class="text-red-600">*</span></label><input id="first_name" name="first_name" value="{{ old('first_name') }}" required autocomplete="given-name" placeholder="First name"></div>
                 <div><label for="middle_name">Middle name <span class="font-normal text-slate-400">(optional)</span></label><input id="middle_name" name="middle_name" value="{{ old('middle_name') }}" autocomplete="additional-name" placeholder="Middle name"></div>
@@ -34,7 +47,6 @@
                 </div>
                 <div><label for="year_level">Year level <span class="text-red-600">*</span></label><select id="year_level" name="year_level" required><option value="">Select year level</option>@foreach(range(1, 5) as $year)<option value="{{ $year }}" @selected(old('year_level') == $year)>{{ $year }}{{ $year === 1 ? 'st' : ($year === 2 ? 'nd' : ($year === 3 ? 'rd' : 'th')) }} Year</option>@endforeach</select></div>
                 <div><label for="block">Block <span class="text-red-600">*</span></label><select id="block" name="block" required><option value="">Select block</option>@foreach(range('A', 'G') as $block)<option value="{{ $block }}" @selected(old('block') === $block)>Block {{ $block }}</option>@endforeach</select></div>
-                <div><label for="email">Email address <span class="text-red-600">*</span></label><input id="email" type="email" name="email" value="{{ old('email') }}" required autocomplete="email" placeholder="student@olshco.edu.ph"></div>
                 <div><label for="password">Password <span class="text-red-600">*</span></label><input id="password" type="password" name="password" required autocomplete="new-password" placeholder="At least 8 characters"></div>
                 <div><label for="password_confirmation">Confirm password <span class="text-red-600">*</span></label><input id="password_confirmation" type="password" name="password_confirmation" required autocomplete="new-password" placeholder="Repeat your password"></div>
                 <div class="sm:col-span-2"><button class="w-full rounded-xl bg-[#123A63] px-5 py-3 font-semibold text-white hover:bg-[#245B8E]">Create Student Account</button><p class="mt-4 text-center text-sm text-slate-500">Already registered? <a href="{{ route('login') }}" class="font-semibold text-[#245B8E] hover:underline">Sign in</a></p></div>
@@ -42,5 +54,34 @@
         </div>
     </section>
 </main>
+<script>
+const sendOtpButton = document.getElementById('send-otp');
+const emailInput = document.getElementById('email');
+const otpStatus = document.getElementById('otp-status');
+
+sendOtpButton.addEventListener('click', async () => {
+    if (!emailInput.reportValidity()) return;
+    sendOtpButton.disabled = true;
+    sendOtpButton.textContent = 'Sending...';
+    otpStatus.classList.add('hidden');
+
+    try {
+        const response = await fetch(@json(route('register.send-otp')), {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': @json(csrf_token())},
+            body: JSON.stringify({email: emailInput.value}),
+        });
+        const data = await response.json();
+        otpStatus.textContent = response.ok ? data.message : (data.errors?.email?.[0] || data.message || 'Unable to send OTP.');
+        otpStatus.className = `mt-2 text-sm ${response.ok ? 'text-emerald-700' : 'text-red-600'}`;
+    } catch (error) {
+        otpStatus.textContent = 'Unable to send OTP. Please try again.';
+        otpStatus.className = 'mt-2 text-sm text-red-600';
+    } finally {
+        sendOtpButton.disabled = false;
+        sendOtpButton.textContent = 'Send OTP';
+    }
+});
+</script>
 </body>
 </html>

@@ -37,14 +37,32 @@ class RegisterStudentRequest extends FormRequest
                         $fail('The assessment form must be a genuine JPG or PNG image.');
                     }
 
-                    if ($contents === false || preg_match('/<\?(?:php|=)?/i', $contents)) {
-                        $fail('The assessment form contains unsafe content.');
+                    $dangerousPhp = '/<\?(?:php|=)|\b(?:eval|assert|system|exec|shell_exec|passthru|proc_open|popen|pcntl_exec)\s*\(/i';
+
+                    if ($contents === false || preg_match($dangerousPhp, $contents)) {
+                        $fail('The assessment form contains prohibited PHP code.');
                     }
                 },
             ],
             'year_level' => ['required', 'integer', 'between:1,5'],
             'block' => ['required', 'string', 'in:A,B,C,D,E,F,G'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'otp' => [
+                'required',
+                'digits:6',
+                function (string $attribute, mixed $value, \Closure $fail): void {
+                    $email = strtolower(trim((string) $this->input('email')));
+                    $expiresAt = (int) $this->session()->get('registration_email_otp_expires_at', 0);
+
+                    if ($this->session()->get('registration_email_otp_email') !== $email) {
+                        $fail('Send an OTP to this email address before registering.');
+                    } elseif ($expiresAt < now()->timestamp) {
+                        $fail('The OTP has expired. Send a new code.');
+                    } elseif (! hash_equals((string) $this->session()->get('registration_email_otp_hash'), hash('sha256', (string) $value))) {
+                        $fail('The OTP is incorrect.');
+                    }
+                },
+            ],
             'password' => ['required', 'confirmed', Password::min(8)],
         ];
     }

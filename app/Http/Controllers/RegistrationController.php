@@ -7,10 +7,13 @@ use App\Models\Student;
 use App\Models\User;
 use App\Models\Course;
 use App\Exceptions\VirusScanException;
+use App\Mail\StudentRegistrationOtp;
 use App\Services\VirusScanner;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -69,6 +72,7 @@ class RegistrationController extends Controller
                     'role' => 'student',
                     'is_active' => true,
                     'registration_verified_at' => null,
+                    'email_verified_at' => now(),
                 ]);
                 Student::create([
                     'user_id' => $user->id,
@@ -88,7 +92,32 @@ class RegistrationController extends Controller
             throw $exception;
         }
 
-        return redirect()->route('login')->with('success', 'Registration submitted. Please wait for an administrator to verify your account before signing in.');
+        $request->session()->forget([
+            'registration_email_otp_hash',
+            'registration_email_otp_email',
+            'registration_email_otp_expires_at',
+        ]);
+
+        return redirect()->route('login')->with('success', 'Email verified and registration submitted. Please wait for an administrator to approve your account.');
+    }
+
+    public function sendOtp(Request $request)
+    {
+        $data = $request->validate([
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+        ]);
+        $email = strtolower(trim($data['email']));
+        $otp = (string) random_int(100000, 999999);
+
+        Mail::to($email)->send(new StudentRegistrationOtp($otp));
+
+        $request->session()->put([
+            'registration_email_otp_hash' => hash('sha256', $otp),
+            'registration_email_otp_email' => $email,
+            'registration_email_otp_expires_at' => now()->addMinutes(10)->timestamp,
+        ]);
+
+        return response()->json(['message' => 'A six-digit OTP was sent to your email.']);
     }
 
     private function storeSanitizedAssessmentForm($file): string
