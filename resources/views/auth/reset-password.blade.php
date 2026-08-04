@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Set New Password — OLSHCO EAS</title>
-    <link rel="stylesheet" href="{{ asset('css/app.css') }}">
+    <link rel="stylesheet" href="{{ asset('css/app.css') }}?v={{ filemtime(public_path('css/app.css')) }}">
 </head>
 <body class="grid min-h-screen place-items-center p-5">
     <form method="post" action="{{ route('password.update') }}" class="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl">
