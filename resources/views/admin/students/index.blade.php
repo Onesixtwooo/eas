@@ -63,14 +63,12 @@
     @error('student_ids')<div class="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ $message }}</div>@enderror
 <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
     <div class="overflow-x-auto">
-        <table class="w-full min-w-[950px] text-left text-sm">
+        <table class="w-full min-w-[760px] text-left text-sm">
             <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                     <th class="w-12 px-5 py-4"><input type="checkbox" class="size-4 w-auto rounded" aria-label="Select all students on this page" @change="toggleAll($event)" :checked="allIds.length > 0 && selected.length === allIds.length"></th>
                     <th class="px-5 py-4">Student</th>
-                    <th class="px-5 py-4">Student ID</th>
                     <th class="px-5 py-4">Course & Section</th>
-                    <th class="px-5 py-4">Address</th>
                     <th class="px-5 py-4">Status</th>
                     <th class="px-5 py-4 text-right">Actions</th>
                 </tr>
@@ -85,9 +83,7 @@
                                 <div><p class="font-semibold text-slate-900">{{ $student->user->name }}</p><p class="text-xs text-slate-500">{{ $student->user->email }}</p></div>
                             </div>
                         </td>
-                        <td class="px-5 py-4 font-semibold text-[#123A63]">{{ $student->student_number }}</td>
                         <td class="px-5 py-4"><b>{{ $student->course->code }}</b><p class="text-xs text-slate-500">Year {{ $student->year_level }}, Section {{ $student->section->name }}</p></td>
-                        <td class="max-w-xs truncate px-5 py-4 text-slate-600">{{ $student->address ?: 'Not provided' }}</td>
                         <td class="px-5 py-4">
                             @if(! $student->user->registration_verified_at)
                                 <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">Pending verification</span>
@@ -116,7 +112,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="7" class="px-6 py-16 text-center"><p class="font-semibold text-slate-700">No students found</p><p class="mt-1 text-sm text-slate-400">Try changing your search or filters.</p></td></tr>
+                    <tr><td colspan="5" class="px-6 py-16 text-center"><p class="font-semibold text-slate-700">No students found</p><p class="mt-1 text-sm text-slate-400">Try changing your search or filters.</p></td></tr>
                 @endforelse
             </tbody>
         </table>
