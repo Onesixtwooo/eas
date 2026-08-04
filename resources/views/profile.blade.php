@@ -21,6 +21,7 @@
                 <div class="flex justify-between gap-4 py-3"><dt class="text-slate-500">Account status</dt><dd class="font-semibold text-emerald-700">{{ $user->is_active ? 'Active' : 'Disabled' }}</dd></div>
                 @if($user->student)
                     <div class="flex justify-between gap-4 py-3"><dt class="text-slate-500">Student number</dt><dd class="text-right font-semibold text-slate-800">{{ $user->student->student_number }}</dd></div>
+                    <div class="flex justify-between gap-4 py-3"><dt class="text-slate-500">Student status</dt><dd class="text-right font-semibold text-slate-800">{{ ucfirst($user->student->student_type ?? 'regular') }}</dd></div>
                     <div class="flex justify-between gap-4 py-3"><dt class="text-slate-500">Course</dt><dd class="text-right font-semibold text-slate-800">{{ $user->student->course?->code ?? 'Not assigned' }}</dd></div>
                     <div class="flex justify-between gap-4 py-3"><dt class="text-slate-500">Year and section</dt><dd class="text-right font-semibold text-slate-800">Year {{ $user->student->year_level }}{{ $user->student->section ? ' – '.$user->student->section->name : '' }}</dd></div>
                 @elseif($user->faculty)
