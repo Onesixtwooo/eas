@@ -156,4 +156,25 @@ class AdminStudentIndexTest extends TestCase
 
         $this->assertSame($currentSection->id, $student->fresh()->section_id);
     }
+
+    public function test_student_details_include_a_message_button_for_admins(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $studentUser = User::factory()->create(['role' => 'student', 'is_active' => true]);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
+        $section = Section::create(['course_id' => $course->id, 'name' => 'A', 'year_level' => 1]);
+        $student = Student::create([
+            'user_id' => $studentUser->id,
+            'student_number' => '26-1003',
+            'course_id' => $course->id,
+            'section_id' => $section->id,
+            'year_level' => 1,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.students.show', $student))
+            ->assertOk()
+            ->assertSee('Message')
+            ->assertSee('action="'.route('messages.select', $student).'"', false);
+    }
 }

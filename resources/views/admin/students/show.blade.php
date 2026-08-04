@@ -13,11 +13,17 @@
             <p class="mt-1 text-slate-500">{{ $student->student_number }}</p>
         </div>
     </div>
-    @if(! $student->user->registration_verified_at)
-        <span class="w-fit rounded-full bg-amber-100 px-4 py-2 text-sm font-bold text-amber-800">Pending Verification</span>
-    @else
-        <span class="w-fit rounded-full px-4 py-2 text-sm font-bold {{ $student->user->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $student->user->is_active ? 'Active Account' : 'Inactive Account' }}</span>
-    @endif
+    <div class="flex flex-wrap items-center gap-3">
+        <form method="post" action="{{ route('messages.select', $student) }}">
+            @csrf
+            <button class="rounded-xl bg-[#123A63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#245B8E]">Message</button>
+        </form>
+        @if(! $student->user->registration_verified_at)
+            <span class="w-fit rounded-full bg-amber-100 px-4 py-2 text-sm font-bold text-amber-800">Pending Verification</span>
+        @else
+            <span class="w-fit rounded-full px-4 py-2 text-sm font-bold {{ $student->user->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $student->user->is_active ? 'Active Account' : 'Inactive Account' }}</span>
+        @endif
+    </div>
 </div>
 
 <div class="mt-6 grid gap-6 lg:grid-cols-[1fr_320px]">
