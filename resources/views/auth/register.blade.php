@@ -8,7 +8,7 @@
 </head>
 <body class="min-h-screen bg-[#F5F7FA]">
 <main class="grid min-h-screen lg:grid-cols-[.8fr_1.2fr]">
-    <section class="hidden flex-col justify-between bg-[#123A63] p-12 text-white lg:flex">
+    <section class="sticky top-0 hidden h-screen flex-col justify-between bg-[#123A63] p-12 text-white lg:flex">
         <a href="{{ route('login') }}" class="flex items-center gap-3"><img src="{{ asset('images.jpg') }}" alt="OLSHCO logo" class="size-12 rounded-full bg-white object-cover"><span><b class="block">OLSHCO EAS</b><span class="text-xs text-blue-200">College Department</span></span></a>
         <div><p class="text-sm font-semibold uppercase tracking-[.25em] text-blue-200">Student Portal</p><h1 class="mt-4 text-4xl font-bold leading-tight">Create your student account.</h1><p class="mt-5 max-w-md leading-relaxed text-blue-100">Submit excuse requests, follow their progress, and access approved admission slips online.</p></div>
         <span></span>
