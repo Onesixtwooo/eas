@@ -79,7 +79,7 @@
                         <td class="px-5 py-4"><input form="bulk-delete-form" type="checkbox" name="student_ids[]" value="{{ $student->id }}" x-model.number="selected" class="size-4 w-auto rounded" aria-label="Select {{ $student->user->name }}"></td>
                         <td class="px-5 py-4">
                             <div class="flex items-center gap-3">
-                                <span class="grid size-10 shrink-0 place-items-center rounded-full bg-[#123A63] font-bold text-white">{{ strtoupper(substr($student->user->name, 0, 1)) }}</span>
+                                <span class="relative grid size-10 shrink-0 place-items-center rounded-full bg-[#123A63] font-bold text-white">{{ strtoupper(substr($student->user->name, 0, 1)) }}<span data-presence-user="{{ $student->user_id }}" title="Offline" class="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-white bg-slate-300"></span></span>
                                 <div><p class="font-semibold text-slate-900">{{ $student->user->name }}</p><p class="text-xs text-slate-500">{{ $student->user->email }}</p></div>
                             </div>
                         </td>
@@ -121,4 +121,20 @@
 </div>
 
 <div class="mt-5">{{ $students->links() }}</div>
+<script>
+async function refreshStudentPresence() {
+    try {
+        const response = await fetch(@json(route('realtime.presence')), {headers: {'Accept': 'application/json'}, cache: 'no-store'});
+        if (!response.ok) return;
+        const online = new Set((await response.json()).online_user_ids.map(String));
+        document.querySelectorAll('[data-presence-user]').forEach(element => {
+            const isOnline = online.has(element.dataset.presenceUser);
+            element.className = `absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-white ${isOnline ? 'bg-emerald-500' : 'bg-slate-300'}`;
+            element.title = isOnline ? 'Online' : 'Offline';
+        });
+    } catch (error) {}
+}
+refreshStudentPresence();
+setInterval(refreshStudentPresence, 10000);
+</script>
 @endsection

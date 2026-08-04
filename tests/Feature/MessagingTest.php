@@ -120,6 +120,44 @@ class MessagingTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_student_can_delete_their_conversation_without_deleting_the_admin_copy(): void
+    {
+        $student = $this->createStudent('student@example.com', '2026-1001');
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+
+        $this->actingAs($student->user)
+            ->postJson(route('messages.store', $student), ['body' => 'Student message'])
+            ->assertCreated();
+        $this->actingAs($admin)
+            ->postJson(route('messages.store', $student), ['body' => 'Administrator reply'])
+            ->assertCreated();
+
+        $this->actingAs($student->user)
+            ->delete(route('messages.conversation.destroy', $student))
+            ->assertRedirect(route('messages.index'))
+            ->assertSessionHas('success');
+
+        $this->actingAs($student->user)
+            ->get(route('messages.index'))
+            ->assertSee('No messages yet')
+            ->assertDontSee('Student message')
+            ->assertDontSee('Administrator reply');
+
+        $this->actingAs($admin)->post(route('messages.select', $student));
+        $this->actingAs($admin)
+            ->get(route('messages.index'))
+            ->assertSee('Student message')
+            ->assertSee('Administrator reply');
+
+        $this->actingAs($admin)
+            ->postJson(route('messages.store', $student), ['body' => 'New administrator message'])
+            ->assertCreated();
+        $this->actingAs($student->user)
+            ->get(route('messages.index'))
+            ->assertSee('New administrator message')
+            ->assertDontSee('Administrator reply');
+    }
+
     public function test_faculty_cannot_access_administrative_messages(): void
     {
         $faculty = User::factory()->create(['role' => 'faculty', 'is_active' => true]);

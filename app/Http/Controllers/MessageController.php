@@ -121,7 +121,7 @@ class MessageController extends Controller
 
     public function deleteConversation(Request $request, Student $student)
     {
-        abort_unless(in_array($request->user()->role, ['admin', 'program_head'], true), 403);
+        $this->authorizeStudent($request, $student);
         MessageConversationState::updateOrCreate(
             ['user_id' => $request->user()->id, 'student_id' => $student->id],
             ['deleted_before_message_id' => $student->messages()->max('id'), 'archived_at' => null]
@@ -153,10 +153,11 @@ class MessageController extends Controller
     private function visibleMessages(Request $request, Student $student)
     {
         $query = $student->messages()->with('sender');
-        if (in_array($request->user()->role, ['admin', 'program_head'], true)) {
-            $cutoff = MessageConversationState::where(['user_id' => $request->user()->id, 'student_id' => $student->id])->value('deleted_before_message_id');
-            if ($cutoff) $query->where('id', '>', $cutoff);
-        }
+        $cutoff = MessageConversationState::where([
+            'user_id' => $request->user()->id,
+            'student_id' => $student->id,
+        ])->value('deleted_before_message_id');
+        if ($cutoff) $query->where('id', '>', $cutoff);
 
         return $query->oldest()->limit(200)->get();
     }

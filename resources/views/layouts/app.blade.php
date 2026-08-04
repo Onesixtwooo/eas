@@ -72,6 +72,10 @@
         </main>
     </div>
     <script>
+        window.addEventListener('pageshow', event => {
+            if (event.persisted) location.reload();
+        });
+
         (() => {
             let revision = @json(cache(\App\Http\Middleware\TrackSystemChanges::CACHE_KEY, 'initial'));
             let formIsDirty = false;

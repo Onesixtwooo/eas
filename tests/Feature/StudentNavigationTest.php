@@ -26,6 +26,22 @@ class StudentNavigationTest extends TestCase
             ->assertDontSee('>Dashboard<', false);
     }
 
+    public function test_authenticated_pages_are_not_cached_and_cannot_be_reopened_after_logout(): void
+    {
+        $student = User::factory()->create(['role' => 'student', 'is_active' => true]);
+
+        $protectedResponse = $this->actingAs($student)->get(route('profile'));
+
+        $protectedResponse->assertOk();
+        $this->assertStringContainsString('no-store', (string) $protectedResponse->headers->get('Cache-Control'));
+        $protectedResponse->assertHeader('Pragma', 'no-cache');
+
+        $this->post(route('logout'))->assertRedirect(route('login'));
+        $this->assertGuest();
+
+        $this->get(route('requests.index'))->assertRedirect(route('login'));
+    }
+
     public function test_user_can_update_their_profile_details(): void
     {
         $student = User::factory()->create(['role' => 'student', 'is_active' => true]);

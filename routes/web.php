@@ -36,6 +36,7 @@ Route::middleware('guest')->group(function () {
 Route::get('/verify/{reference}', [VerificationController::class, 'show'])->name('verify');
 Route::middleware('auth')->group(function () {
     Route::get('/realtime/version', [RealtimeController::class, 'version'])->middleware('throttle:30,1')->name('realtime.version');
+    Route::get('/realtime/presence', [RealtimeController::class, 'presence'])->middleware('throttle:30,1')->name('realtime.presence');
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
     Route::get('/messages/archived', [MessageController::class, 'index'])->name('messages.archived');
     Route::post('/messages/select/{student}', [MessageController::class, 'select'])->name('messages.select');
