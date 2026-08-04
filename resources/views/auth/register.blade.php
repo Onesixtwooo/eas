@@ -34,6 +34,23 @@
                     <input id="otp" name="otp" value="{{ old('otp') }}" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required placeholder="Enter the 6-digit code">
                     @error('otp')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
                 </div>
+                <fieldset class="sm:col-span-2">
+                    <legend class="mb-2 text-sm font-semibold text-slate-700">Student type <span class="text-red-600">*</span></legend>
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-300 p-4 font-normal"><input type="radio" name="student_type" value="regular" class="mt-1 size-4 w-auto" @checked(old('student_type', 'regular') === 'regular') required><span><strong class="block text-slate-900">Regular</strong><span class="text-sm text-slate-500">Subjects follow the selected year level and block.</span></span></label>
+                        <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-300 p-4 font-normal"><input type="radio" name="student_type" value="irregular" class="mt-1 size-4 w-auto" @checked(old('student_type') === 'irregular') required><span><strong class="block text-slate-900">Irregular</strong><span class="text-sm text-slate-500">Select currently enrolled subjects from all year levels.</span></span></label>
+                    </div>
+                </fieldset>
+                <div id="irregular-subjects" class="sm:col-span-2 hidden rounded-2xl border border-blue-100 bg-blue-50/60 p-5">
+                    <h3 class="font-bold text-slate-900">Currently enrolled subjects</h3>
+                    <p class="mt-1 text-sm text-slate-500">Check every subject you are taking this term.</p>
+                    @forelse($subjects as $year => $yearSubjects)
+                        <div class="mt-5"><h4 class="text-sm font-bold text-[#123A63]">{{ $year ? 'Year '.$year : 'Other subjects' }}</h4><div class="mt-2 grid gap-2 sm:grid-cols-2">@foreach($yearSubjects as $subject)<label class="flex items-start gap-2 rounded-lg bg-white p-3 font-normal"><input type="checkbox" name="subject_ids[]" value="{{ $subject->id }}" class="mt-1 size-4 w-auto" @checked(in_array($subject->id, old('subject_ids', [])))><span><strong>{{ $subject->code }}</strong> — {{ $subject->name }}</span></label>@endforeach</div></div>
+                    @empty
+                        <p class="mt-4 text-sm text-red-600">No active subjects are available. Contact the administrator.</p>
+                    @endforelse
+                    @error('subject_ids')<p class="mt-3 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
                 <div><label for="student_number">Student ID <span class="text-red-600">*</span></label><input id="student_number" name="student_number" value="{{ old('student_number') }}" required placeholder="e.g. 2026-0001"></div>
                 <div><label for="first_name">First name <span class="text-red-600">*</span></label><input id="first_name" name="first_name" value="{{ old('first_name') }}" required autocomplete="given-name" placeholder="First name"></div>
                 <div><label for="middle_name">Middle name <span class="font-normal text-slate-400">(optional)</span></label><input id="middle_name" name="middle_name" value="{{ old('middle_name') }}" autocomplete="additional-name" placeholder="Middle name"></div>
@@ -58,6 +75,17 @@
 const sendOtpButton = document.getElementById('send-otp');
 const emailInput = document.getElementById('email');
 const otpStatus = document.getElementById('otp-status');
+const irregularSubjects = document.getElementById('irregular-subjects');
+const studentTypeInputs = document.querySelectorAll('input[name="student_type"]');
+
+function updateStudentTypeFields() {
+    const irregular = document.querySelector('input[name="student_type"]:checked')?.value === 'irregular';
+    irregularSubjects.classList.toggle('hidden', !irregular);
+    irregularSubjects.querySelectorAll('input[type="checkbox"]').forEach(input => input.disabled = !irregular);
+}
+
+studentTypeInputs.forEach(input => input.addEventListener('change', updateStudentTypeFields));
+updateStudentTypeFields();
 
 sendOtpButton.addEventListener('click', async () => {
     if (!emailInput.reportValidity()) return;

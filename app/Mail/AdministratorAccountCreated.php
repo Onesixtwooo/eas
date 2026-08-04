@@ -20,7 +20,7 @@ class AdministratorAccountCreated extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Your administrator account');
+        return new Envelope(subject: 'Your administrative account');
     }
 
     public function content(): Content

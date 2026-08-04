@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Requests;
 
+use App\Models\Course;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Rule;
@@ -13,6 +14,11 @@ class RegisterStudentRequest extends FormRequest
     {
         return [
             'student_number' => ['required', 'string', 'max:50', 'unique:students,student_number'],
+            'student_type' => [Rule::requiredIf($this->routeIs('register.store')), 'nullable', Rule::in(['regular', 'irregular'])],
+            'subject_ids' => [Rule::requiredIf($this->routeIs('register.store') && $this->input('student_type') === 'irregular'), 'nullable', 'array', 'min:1'],
+            'subject_ids.*' => ['integer', 'distinct', Rule::exists('subjects', 'id')->where(fn ($query) => $query
+                ->where('is_active', true)
+                ->where('course_id', Course::where('code', 'BSIT')->value('id')))],
             'first_name' => ['required', 'string', 'max:100'],
             'middle_name' => ['nullable', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
@@ -48,9 +54,13 @@ class RegisterStudentRequest extends FormRequest
             'block' => ['required', 'string', 'in:A,B,C,D,E,F,G'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'otp' => [
-                'required',
+                Rule::requiredIf($this->routeIs('register.store')),
+                'nullable',
                 'digits:6',
                 function (string $attribute, mixed $value, \Closure $fail): void {
+                    if (! $this->routeIs('register.store')) {
+                        return;
+                    }
                     $email = strtolower(trim((string) $this->input('email')));
                     $expiresAt = (int) $this->session()->get('registration_email_otp_expires_at', 0);
 

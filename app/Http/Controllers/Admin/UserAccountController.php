@@ -52,6 +52,7 @@ class UserAccountController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+            'role' => ['required', Rule::in(['admin', 'program_head'])],
         ]);
 
         $password = Str::random(12);
@@ -59,7 +60,6 @@ class UserAccountController extends Controller
         DB::transaction(function () use ($data, $password) {
             $administrator = User::create($data + [
                 'password' => $password,
-                'role' => 'admin',
                 'is_active' => true,
             ]);
 
@@ -68,7 +68,7 @@ class UserAccountController extends Controller
             );
         });
 
-        return redirect()->route('admin.accounts.index')->with('success', 'Administrator account created and login details emailed.');
+        return redirect()->route('admin.accounts.index')->with('success', 'Account created and login details emailed.');
     }
 
     public function update(Request $request, User $account)
@@ -81,8 +81,8 @@ class UserAccountController extends Controller
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
         ]);
 
-        if ($account->is($request->user()) && ($data['role'] !== 'admin' || ! (bool) $data['is_active'])) {
-            return back()->withErrors(['is_active' => 'You cannot remove your own administrator access or disable your current account.'])->withInput();
+        if ($account->is($request->user()) && (! in_array($data['role'], ['admin', 'program_head'], true) || ! (bool) $data['is_active'])) {
+            return back()->withErrors(['is_active' => 'You cannot remove your own administrative access or disable your current account.'])->withInput();
         }
 
         if (blank($data['password'])) {

@@ -113,6 +113,7 @@ class AdminUserAccountTest extends TestCase
             ->post(route('admin.accounts.store'), [
                 'name' => 'Second Administrator',
                 'email' => 'second.admin@example.com',
+                'role' => 'admin',
             ])
             ->assertRedirect(route('admin.accounts.index'));
 
@@ -129,6 +130,29 @@ class AdminUserAccountTest extends TestCase
                 && strlen($mail->temporaryPassword) === 12
                 && Hash::check($mail->temporaryPassword, $administrator->password);
         });
+    }
+
+    public function test_program_head_can_create_another_program_head_with_emailed_password(): void
+    {
+        Mail::fake();
+        $programHead = User::factory()->create(['role' => 'program_head', 'is_active' => true]);
+
+        $this->actingAs($programHead)
+            ->post(route('admin.accounts.store'), [
+                'name' => 'Second Program Head',
+                'email' => 'head@example.com',
+                'role' => 'program_head',
+            ])
+            ->assertRedirect(route('admin.accounts.index'));
+
+        $account = User::where('email', 'head@example.com')->firstOrFail();
+        $this->assertSame('program_head', $account->role);
+        $this->assertTrue($account->is_active);
+        Mail::assertSent(AdministratorAccountCreated::class, fn ($mail) =>
+            $mail->hasTo('head@example.com')
+                && strlen($mail->temporaryPassword) === 12
+                && Hash::check($mail->temporaryPassword, $account->password)
+        );
     }
 
     public function test_create_administrator_form_does_not_show_password_fields(): void

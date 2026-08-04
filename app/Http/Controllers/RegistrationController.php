@@ -6,6 +6,7 @@ use App\Models\Section;
 use App\Models\Student;
 use App\Models\User;
 use App\Models\Course;
+use App\Models\Subject;
 use App\Exceptions\VirusScanException;
 use App\Mail\StudentRegistrationOtp;
 use App\Services\VirusScanner;
@@ -25,7 +26,11 @@ class RegistrationController extends Controller
         $sections = Section::with('course')->where('is_active', true)
             ->orderBy('year_level')->orderBy('name')->get();
 
-        return view('auth.register', compact('sections'));
+        $subjects = Subject::where('is_active', true)
+            ->whereHas('course', fn ($query) => $query->where('code', 'BSIT'))
+            ->orderBy('year_level')->orderBy('code')->get()->groupBy('year_level');
+
+        return view('auth.register', compact('sections', 'subjects'));
     }
 
     public function store(RegisterStudentRequest $request, VirusScanner $virusScanner)
@@ -74,9 +79,10 @@ class RegistrationController extends Controller
                     'registration_verified_at' => null,
                     'email_verified_at' => now(),
                 ]);
-                Student::create([
+                $student = Student::create([
                     'user_id' => $user->id,
                     'student_number' => trim($request->input('student_number')),
+                    'student_type' => $request->input('student_type', 'regular'),
                     'address' => trim($request->input('address')),
                     'assessment_form_path' => $assessmentPath,
                     'assessment_form_name' => $assessmentForm->getClientOriginalName(),
@@ -84,6 +90,10 @@ class RegistrationController extends Controller
                     'section_id' => $section->id,
                     'year_level' => $section->year_level,
                 ]);
+
+                if ($student->student_type === 'irregular') {
+                    $student->subjects()->sync($request->input('subject_ids', []));
+                }
 
                 return $user;
             });

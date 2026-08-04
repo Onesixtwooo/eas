@@ -6,6 +6,7 @@ use App\Exceptions\VirusScanException;
 use App\Mail\StudentRegistrationOtp;
 use App\Models\Course;
 use App\Models\Student;
+use App\Models\Subject;
 use App\Models\User;
 use App\Services\VirusScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -88,6 +89,29 @@ class StudentRegistrationTest extends TestCase
         );
     }
 
+    public function test_irregular_student_selects_current_subjects_from_multiple_year_levels(): void
+    {
+        Mail::fake();
+        Storage::fake('local');
+        $course = Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
+        $firstYear = Subject::create(['code' => 'CC101', 'name' => 'Introduction to Computing', 'course_id' => $course->id, 'year_level' => 1, 'is_active' => true]);
+        $thirdYear = Subject::create(['code' => 'NET102', 'name' => 'Networking 2', 'course_id' => $course->id, 'year_level' => 3, 'is_active' => true]);
+        Subject::create(['code' => 'GE8', 'name' => 'Art Appreciation', 'course_id' => $course->id, 'year_level' => 2, 'is_active' => true]);
+
+        $this->withSession($this->otpSession())->post(route('register.store'), $this->registrationData([
+            'student_type' => 'irregular',
+            'subject_ids' => [$firstYear->id, $thirdYear->id],
+            'assessment_form' => UploadedFile::fake()->image('assessment.png', 200, 200),
+        ]))->assertRedirect(route('login'));
+
+        $student = Student::firstOrFail();
+        $this->assertSame('irregular', $student->student_type);
+        $this->assertEqualsCanonicalizing(
+            [$firstYear->id, $thirdYear->id],
+            $student->subjects()->pluck('subjects.id')->all()
+        );
+    }
+
     public function test_registration_rejects_an_incorrect_or_expired_otp(): void
     {
         $data = $this->registrationData(['assessment_form' => UploadedFile::fake()->image('assessment.png', 200, 200)]);
@@ -142,6 +166,7 @@ class StudentRegistrationTest extends TestCase
     {
         return array_merge([
             'student_number' => '2026-1001',
+            'student_type' => 'regular',
             'first_name' => 'Sample',
             'middle_name' => '',
             'last_name' => 'Student',

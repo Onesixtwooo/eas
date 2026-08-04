@@ -26,7 +26,7 @@
                 </a>
             @endforeach
 
-            @if(auth()->user()->role === 'admin')
+            @if(in_array(auth()->user()->role, ['admin', 'program_head']))
                 <p class="px-4 pb-1 pt-5 text-[11px] font-bold uppercase tracking-[.18em] text-blue-300">Administration</p>
                 @foreach([
                     ['admin.students.index', 'Students', '@'],
@@ -41,7 +41,7 @@
 
             <p class="px-4 pb-1 pt-5 text-[11px] font-bold uppercase tracking-[.18em] text-blue-300">Account</p>
             @php($accountLinks = [])
-            @if(auth()->user()->role === 'admin') @php($accountLinks[] = ['admin.accounts.index', 'User Accounts', '@']) @endif
+            @if(in_array(auth()->user()->role, ['admin', 'program_head'])) @php($accountLinks[] = ['admin.accounts.index', 'User Accounts', '@']) @endif
             @php($accountLinks[] = ['profile', 'Profile', 'O'])
             @foreach($accountLinks as [$route, $label, $icon])
                 <a href="{{ route($route) }}" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs($route) || ($route === 'admin.accounts.index' && request()->routeIs('admin.accounts.*')) ? 'bg-white text-[#123A63] shadow' : 'text-blue-100 hover:bg-white/10' }}">

@@ -93,7 +93,7 @@ class StudentController extends Controller
 
     public function show(Student $student)
     {
-        $student->load(['user', 'course', 'section']);
+        $student->load(['user', 'course', 'section', 'subjects']);
         $student->loadCount('requests');
         $sections = Section::where('course_id', $student->course_id)
             ->where('is_active', true)

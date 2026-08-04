@@ -27,6 +27,7 @@
             @foreach([
                 ['Full name', $student->user->name],
                 ['Student ID', $student->student_number],
+                ['Student type', ucfirst($student->student_type ?? 'regular')],
                 ['Email address', $student->user->email],
                 ['Course', $student->course->name],
                 ['Year level', 'Year '.$student->year_level],
@@ -35,6 +36,9 @@
                 <div><dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">{{ $label }}</dt><dd class="mt-1 font-medium text-slate-800">{{ $value }}</dd></div>
             @endforeach
             <div class="sm:col-span-2"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Home address</dt><dd class="mt-1 font-medium text-slate-800">{{ $student->address ?: 'Not provided' }}</dd></div>
+            @if($student->student_type === 'irregular')
+                <div class="sm:col-span-2"><dt class="text-xs font-semibold uppercase tracking-wide text-slate-400">Currently enrolled subjects</dt><dd class="mt-2 flex flex-wrap gap-2">@forelse($student->subjects as $subject)<span class="rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-800">{{ $subject->code }} — {{ $subject->name }}</span>@empty<span class="text-red-600">No subjects selected</span>@endforelse</dd></div>
+            @endif
         </dl>
     </section>
 

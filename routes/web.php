@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\UserAccountController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExcuseRequestController;
+use App\Http\Controllers\ExcuseRequestSettingController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\StudentEmailVerificationController;
@@ -35,6 +36,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/requests', [ExcuseRequestController::class, 'index'])->name('requests.index');
+    Route::put('/requests/settings', [ExcuseRequestSettingController::class, 'update'])->middleware('role:admin,program_head')->name('requests.settings.update');
     Route::middleware('role:student')->group(function () {
         Route::get('/requests/create', [ExcuseRequestController::class, 'create'])->name('requests.create');
         Route::post('/requests', [ExcuseRequestController::class, 'store'])->name('requests.store');
@@ -50,7 +52,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'updateDetails'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
-    Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
+    Route::middleware('role:admin,program_head')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/', fn () => redirect()->route('admin.students.index'))->name('index');
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
         Route::get('/accounts', [UserAccountController::class, 'index'])->name('accounts.index');

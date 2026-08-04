@@ -81,7 +81,7 @@
                     @endif
                 </td>
                 <td class="issuer">
-                    <strong>PRINCESS LEA ANN D. CALINA, MSIT</strong>
+                    <strong>{{ strtoupper($programHeadName) }}</strong>
                     <em>BSIT PROGRAM HEAD</em>
                 </td>
                 <td class="verified-date">{{ $item->approved_at?->format('m/d/Y') }}</td>

@@ -3,7 +3,7 @@
 <body>
     <p>Hello {{ $administrator->name }},</p>
 
-    <p>An administrator account has been created for you at {{ config('app.name') }}.</p>
+    <p>A {{ strtolower(ucwords(str_replace('_', ' ', $administrator->role))) }} account has been created for you at {{ config('app.name') }}.</p>
 
     <p><strong>Email:</strong> {{ $administrator->email }}<br>
     <strong>Temporary password:</strong> {{ $temporaryPassword }}</p>

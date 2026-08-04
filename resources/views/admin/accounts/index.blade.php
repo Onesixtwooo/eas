@@ -9,7 +9,7 @@
         <h1 class="mt-1 text-3xl font-bold text-slate-900">User Accounts</h1>
         <p class="mt-2 text-slate-500">View the administrator, program head, faculty, and student accounts registered for portal access.</p>
     </div>
-    <a href="{{ route('admin.accounts.create') }}" class="rounded-xl bg-[#123A63] px-5 py-3 text-center font-semibold text-white hover:bg-[#245B8E]">+ Add Admin</a>
+    <a href="{{ route('admin.accounts.create') }}" class="rounded-xl bg-[#123A63] px-5 py-3 text-center font-semibold text-white hover:bg-[#245B8E]">+ Add Account</a>
 </div>
 
 <form method="get" class="mt-7 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1fr_220px_180px_auto]">

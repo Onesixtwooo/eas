@@ -133,10 +133,22 @@ class AdminRequestReviewTest extends TestCase
         ]);
 
         $this->actingAs($admin)
+            ->put(route('requests.settings.update'), [
+                'program_head_name' => 'Dr. Maria Santos, MIT',
+            ])
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseHas('system_settings', [
+            'key' => 'program_head_name',
+            'value' => 'Dr. Maria Santos, MIT',
+        ]);
+
+        $this->actingAs($admin)
             ->get(route('requests.slip', $request))
             ->assertOk()
             ->assertSee('CONDITIONAL')
             ->assertSee('Under Constant Monitoring')
+            ->assertSee('DR. MARIA SANTOS, MIT')
             ->assertSee('GE1')
             ->assertDontSee('Understanding the Self');
     }
