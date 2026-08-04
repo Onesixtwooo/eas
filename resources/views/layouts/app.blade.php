@@ -9,6 +9,11 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body x-data="{ menu: false }" class="min-h-screen">
+    <div id="realtime-update" class="no-print fixed bottom-5 right-5 z-50 hidden max-w-sm rounded-2xl border border-blue-200 bg-white p-4 shadow-2xl">
+        <p class="font-semibold text-slate-900">New system updates are available.</p>
+        <p class="mt-1 text-sm text-slate-500">Refresh when ready. Your unsaved form entries will not be discarded automatically.</p>
+        <button type="button" onclick="location.reload()" class="mt-3 rounded-lg bg-[#123A63] px-4 py-2 text-sm font-semibold text-white">Refresh page</button>
+    </div>
     <aside :class="menu ? 'translate-x-0' : '-translate-x-full'" class="no-print fixed inset-y-0 left-0 z-40 w-72 bg-[#123A63] text-white transition lg:translate-x-0">
         <div class="flex h-20 items-center gap-3 border-b border-white/10 px-6">
             <img src="{{ asset('images.jpg') }}" alt="OLSHCO logo" class="size-11 rounded-full bg-white object-cover">
@@ -19,9 +24,9 @@
                 ? [['requests.index', 'My Requests', '=']]
                 : [['dashboard', 'Dashboard', '*'], ['requests.index', 'Excuse Requests', '=']])
             @if(auth()->user()->role === 'student') @php($links[] = ['requests.create', 'Submit Excuse Slip', '+']) @endif
-            @if(in_array(auth()->user()->role, ['admin', 'program_head'])) @php($links[] = ['reports', 'Reports', '#']) @endif
+            @if(in_array(auth()->user()->role, ['student', 'admin', 'program_head'])) @php($links[] = ['messages.index', 'Messages', '#']) @endif
             @foreach($links as [$route, $label, $icon])
-                <a href="{{ route($route) }}" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs($route) || ($route === 'admin.subjects.index' && request()->routeIs('admin.subjects.*')) ? 'bg-white text-[#123A63] shadow' : 'text-blue-100 hover:bg-white/10' }}">
+                <a href="{{ route($route) }}" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs($route) || ($route === 'messages.index' && request()->routeIs('messages.*')) || ($route === 'admin.subjects.index' && request()->routeIs('admin.subjects.*')) ? 'bg-white text-[#123A63] shadow' : 'text-blue-100 hover:bg-white/10' }}">
                     <span class="w-5 text-center text-lg">{{ $icon }}</span>{{ $label }}
                 </a>
             @endforeach
@@ -66,5 +71,48 @@
             @yield('content')
         </main>
     </div>
+    <script>
+        (() => {
+            let revision = @json(cache(\App\Http\Middleware\TrackSystemChanges::CACHE_KEY, 'initial'));
+            let formIsDirty = false;
+            const updateNotice = document.getElementById('realtime-update');
+
+            document.addEventListener('input', event => {
+                if (event.target.closest('form')) formIsDirty = true;
+            });
+            document.addEventListener('change', event => {
+                if (event.target.closest('form')) formIsDirty = true;
+            });
+
+            async function checkForUpdates() {
+                if (document.hidden) return;
+
+                try {
+                    const response = await fetch(@json(route('realtime.version')), {
+                        headers: {'Accept': 'application/json'},
+                        cache: 'no-store',
+                    });
+                    if (!response.ok) return;
+
+                    const current = (await response.json()).revision;
+                    if (current === revision) return;
+                    revision = current;
+
+                    if (formIsDirty) {
+                        updateNotice.classList.remove('hidden');
+                    } else {
+                        location.reload();
+                    }
+                } catch (error) {
+                    // A temporary connection failure is retried on the next interval.
+                }
+            }
+
+            setInterval(checkForUpdates, 5000);
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) checkForUpdates();
+            });
+        })();
+    </script>
 </body>
 </html>

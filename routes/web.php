@@ -10,6 +10,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExcuseRequestController;
 use App\Http\Controllers\ExcuseRequestSettingController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RealtimeController;
+use App\Http\Controllers\MessageController;
 use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\StudentEmailVerificationController;
 use App\Http\Controllers\VerificationController;
@@ -33,6 +35,16 @@ Route::middleware('guest')->group(function () {
 });
 Route::get('/verify/{reference}', [VerificationController::class, 'show'])->name('verify');
 Route::middleware('auth')->group(function () {
+    Route::get('/realtime/version', [RealtimeController::class, 'version'])->middleware('throttle:30,1')->name('realtime.version');
+    Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
+    Route::get('/messages/archived', [MessageController::class, 'index'])->name('messages.archived');
+    Route::post('/messages/select/{student}', [MessageController::class, 'select'])->name('messages.select');
+    Route::post('/messages/{student}', [MessageController::class, 'store'])->name('messages.store');
+    Route::put('/messages/item/{message}', [MessageController::class, 'update'])->name('messages.update');
+    Route::delete('/messages/item/{message}', [MessageController::class, 'destroy'])->name('messages.destroy');
+    Route::patch('/messages/conversation/{student}/archive', [MessageController::class, 'archive'])->name('messages.archive');
+    Route::delete('/messages/conversation/{student}', [MessageController::class, 'deleteConversation'])->name('messages.conversation.destroy');
+    Route::get('/messages/{student}/updates', [MessageController::class, 'updates'])->middleware('throttle:60,1')->name('messages.updates');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/requests', [ExcuseRequestController::class, 'index'])->name('requests.index');
@@ -85,5 +97,4 @@ Route::middleware('auth')->group(function () {
         Route::patch('/instructor-assignments/{assignment}/toggle', [InstructorAssignmentController::class, 'toggle'])->name('instructor-assignments.toggle');
         Route::delete('/instructor-assignments/{assignment}', [InstructorAssignmentController::class, 'destroy'])->name('instructor-assignments.destroy');
     });
-    Route::view('/reports','placeholder',['title' => 'Reports'])->middleware('role:admin,program_head')->name('reports');
 });

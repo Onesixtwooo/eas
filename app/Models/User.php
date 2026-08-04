@@ -60,4 +60,13 @@ class User extends Authenticatable
     public function student() { return $this->hasOne(Student::class); }
     public function faculty() { return $this->hasOne(Faculty::class); }
     public function hasRole(string ...$roles): bool { return in_array($this->role, $roles, true); }
+    public function maskedAdministrativeName(): string
+    {
+        $parts = collect(preg_split('/\s+/', trim($this->name)))->filter()->values();
+        $initials = $parts->count() > 1 ? [$parts->first(), $parts->last()] : [$parts->first()];
+
+        return collect($initials)->filter()->map(fn ($part, $index) =>
+            mb_strtoupper(mb_substr($part, 0, 1)).str_repeat('*', $index === 0 ? 4 : 5)
+        )->implode(' ');
+    }
 }
