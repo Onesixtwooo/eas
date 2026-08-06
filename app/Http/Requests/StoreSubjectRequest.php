@@ -19,6 +19,7 @@ class StoreSubjectRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'course_id' => ['required', 'exists:courses,id'],
             'year_level' => ['required', 'integer', 'between:1,5'],
+            'semester' => ['required', 'integer', 'in:1,2'],
         ];
     }
 
@@ -28,6 +29,7 @@ class StoreSubjectRequest extends FormRequest
             'code' => 'subject code',
             'course_id' => 'course',
             'year_level' => 'year level',
+            'semester' => 'semester',
         ];
     }
 }

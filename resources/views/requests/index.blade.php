@@ -30,7 +30,7 @@
     <input name="search" value="{{ request('search') }}" placeholder="{{ auth()->user()->role === 'student' ? 'Search reference or subject…' : 'Search reference, student, or subject…' }}">
     <select name="status">
         <option value="">All statuses</option>
-        @foreach(['draft','submitted','under_review','returned','approved','rejected','acknowledged','completed'] as $status)
+        @foreach(['draft','submitted','under_review','returned','approved','rejected','cancelled','acknowledged','completed'] as $status)
             <option value="{{ $status }}" @selected(request('status') === $status)>{{ ucwords(str_replace('_', ' ', $status)) }}</option>
         @endforeach
     </select>

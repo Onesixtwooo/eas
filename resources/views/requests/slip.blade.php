@@ -49,6 +49,17 @@
             <span class="fill-line absence-line">{{ $item->absence_date->format('F d, Y') }}</span>.
         </p>
 
+        <p class="sentence">
+            Class time:
+            <span class="fill-line reason-line">
+                @if($item->start_time && $item->end_time)
+                    {{ date('g:i A', strtotime($item->start_time)) }} to {{ date('g:i A', strtotime($item->end_time)) }}
+                @else
+                    Not specified
+                @endif
+            </span>
+        </p>
+
         <p>Thank you very much for your consideration.</p>
 
         <div class="respectfully">

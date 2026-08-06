@@ -45,15 +45,17 @@ class SubjectCreationTest extends TestCase
             'name' => 'Object-Oriented Programming',
             'course_id' => $course->id,
             'year_level' => 2,
+            'semester' => 1,
         ]);
 
-        $response->assertRedirect(route('admin.subjects.index'));
+        $response->assertRedirect(route('admin.subjects.index', ['semester' => 1]));
         $response->assertSessionHasNoErrors();
         $this->assertDatabaseHas('subjects', [
             'code' => 'PF201',
             'name' => 'Object-Oriented Programming',
             'course_id' => $course->id,
             'year_level' => 2,
+            'semester' => 1,
             'is_active' => true,
         ]);
     }
@@ -84,8 +86,9 @@ class SubjectCreationTest extends TestCase
                 'name' => 'Introduction to Programming',
                 'course_id' => $course->id,
                 'year_level' => 2,
+                'semester' => 2,
             ])
-            ->assertRedirect(route('admin.subjects.index'))
+            ->assertRedirect(route('admin.subjects.index', ['semester' => 2]))
             ->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('subjects', [
@@ -93,6 +96,7 @@ class SubjectCreationTest extends TestCase
             'code' => 'PF101',
             'name' => 'Introduction to Programming',
             'year_level' => 2,
+            'semester' => 2,
         ]);
     }
 
@@ -117,5 +121,20 @@ class SubjectCreationTest extends TestCase
 
         $response->assertSessionHasErrors(['code', 'year_level']);
         $this->assertDatabaseCount('subjects', 1);
+    }
+
+    public function test_subject_tabs_display_only_the_selected_semester(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
+        Subject::create(['code' => 'FIRST101', 'name' => 'First Semester Subject', 'course_id' => $course->id, 'year_level' => 1, 'semester' => 1]);
+        Subject::create(['code' => 'SECOND101', 'name' => 'Second Semester Subject', 'course_id' => $course->id, 'year_level' => 1, 'semester' => 2]);
+
+        $this->actingAs($admin)->get(route('admin.subjects.index'))
+            ->assertOk()->assertSee('First Semester')->assertSee('Second Semester')
+            ->assertSee('FIRST101')->assertDontSee('SECOND101');
+
+        $this->actingAs($admin)->get(route('admin.subjects.index', ['semester' => 2]))
+            ->assertOk()->assertSee('SECOND101')->assertDontSee('FIRST101');
     }
 }

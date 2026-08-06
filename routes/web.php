@@ -54,11 +54,15 @@ Route::middleware('auth')->group(function () {
         Route::get('/requests/create', [ExcuseRequestController::class, 'create'])->name('requests.create');
         Route::post('/requests', [ExcuseRequestController::class, 'store'])->name('requests.store');
         Route::post('/requests/{excuseRequest}/submit', [ExcuseRequestController::class, 'submit'])->name('requests.submit');
+        Route::post('/requests/{excuseRequest}/cancel', [ExcuseRequestController::class, 'cancel'])->name('requests.cancel');
+        Route::get('/requests/{excuseRequest}/edit', [ExcuseRequestController::class, 'edit'])->name('requests.edit');
+        Route::patch('/requests/{excuseRequest}', [ExcuseRequestController::class, 'update'])->name('requests.update');
         Route::patch('/requests/{excuseRequest}/attachment', [ExcuseRequestController::class, 'updateAttachment'])->name('requests.attachment.update');
     });
     Route::get('/request-documents/{document}', [ExcuseRequestController::class, 'document'])->name('requests.documents.show');
     Route::get('/requests/{excuseRequest}', [ExcuseRequestController::class, 'show'])->name('requests.show');
     Route::get('/requests/{excuseRequest}/slip', [ExcuseRequestController::class, 'slip'])->name('requests.slip');
+    Route::delete('/requests/{excuseRequest}', [ExcuseRequestController::class, 'destroy'])->middleware('role:admin,program_head')->name('requests.destroy');
     Route::post('/requests/{excuseRequest}/review', [WorkflowController::class, 'review'])->middleware('role:admin,program_head')->name('requests.review');
     Route::post('/requests/{excuseRequest}/acknowledge', [WorkflowController::class, 'acknowledge'])->middleware('role:faculty')->name('requests.acknowledge');
     Route::post('/requests/{excuseRequest}/complete', [WorkflowController::class, 'complete'])->middleware('role:faculty')->name('requests.complete');

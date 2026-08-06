@@ -13,9 +13,13 @@ class SubjectController extends Controller
     public function index(Request $request)
     {
         $search = trim((string) $request->input('search'));
+        $semester = in_array($request->integer('semester'), [1, 2], true)
+            ? $request->integer('semester')
+            : 1;
 
         return view('admin.subjects.index', [
             'subjects' => Subject::with('course')
+                ->where('semester', $semester)
                 ->when($search !== '', function ($query) use ($search) {
                     $query->where(function ($query) use ($search) {
                         $query->where('code', 'like', "%{$search}%")
@@ -31,6 +35,7 @@ class SubjectController extends Controller
                 ->orderBy('code')
                 ->paginate(20)
                 ->withQueryString(),
+            'semester' => $semester,
         ]);
     }
 
@@ -51,7 +56,7 @@ class SubjectController extends Controller
 
         Subject::create($data);
 
-        return redirect()->route('admin.subjects.index')
+        return redirect()->route('admin.subjects.index', ['semester' => $data['semester']])
             ->with('success', "Subject {$data['code']} added for Year {$data['year_level']}.");
     }
 
@@ -71,7 +76,7 @@ class SubjectController extends Controller
 
         $subject->update($data);
 
-        return redirect()->route('admin.subjects.index')
+        return redirect()->route('admin.subjects.index', ['semester' => $data['semester']])
             ->with('success', "Subject {$data['code']} updated successfully.");
     }
 }

@@ -22,7 +22,7 @@ class AdminRequestReviewTest extends TestCase
     public function test_system_admin_can_review_and_approve_a_request(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
-        $studentUser = User::factory()->create(['role' => 'student', 'is_active' => true]);
+        $studentUser = User::factory()->create(['name' => 'Antolin Catabona', 'role' => 'student', 'is_active' => true]);
         $course = Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
         $section = Section::create(['course_id' => $course->id, 'name' => 'A', 'year_level' => 1]);
         $student = Student::create([
@@ -44,6 +44,8 @@ class AdminRequestReviewTest extends TestCase
             'academic_year_id' => $academicYear->id,
             'semester_id' => $semester->id,
             'absence_date' => now()->toDateString(),
+            'start_time' => '08:00',
+            'end_time' => '09:30',
             'reason_category_id' => $reason->id,
             'explanation' => 'The student was unable to attend because of illness.',
             'status' => 'submitted',
@@ -61,7 +63,7 @@ class AdminRequestReviewTest extends TestCase
         $request->refresh();
         $this->assertSame('approved', $request->status);
         $this->assertSame($admin->id, $request->reviewed_by);
-        $this->assertNotNull($request->reference_number);
+        $this->assertSame('EAS-2026-CA-0001', $request->reference_number);
         $this->actingAs($admin)
             ->get(route('requests.slip', $request))
             ->assertOk()
@@ -124,6 +126,8 @@ class AdminRequestReviewTest extends TestCase
             'academic_year_id' => $academicYear->id,
             'semester_id' => $semester->id,
             'absence_date' => now()->toDateString(),
+            'start_time' => '08:00',
+            'end_time' => '09:30',
             'reason_category_id' => $reason->id,
             'explanation' => 'The student was unable to attend class.',
             'status' => 'approved',
@@ -149,6 +153,7 @@ class AdminRequestReviewTest extends TestCase
             ->assertSee('CONDITIONAL')
             ->assertSee('Under Constant Monitoring')
             ->assertSee('DR. MARIA SANTOS, MIT')
+            ->assertSee('8:00 AM to 9:30 AM')
             ->assertSee('GE1')
             ->assertDontSee('Understanding the Self');
     }
