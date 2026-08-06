@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Exceptions\VirusScanException;
 use App\Mail\StudentRegistrationOtp;
+use App\Mail\StudentRegistrationDeclined;
 use App\Models\Course;
+use App\Models\Section;
 use App\Models\Student;
 use App\Models\Subject;
 use App\Models\User;
@@ -87,6 +89,46 @@ class StudentRegistrationTest extends TestCase
         Mail::assertSent(StudentRegistrationOtp::class, fn ($mail) =>
             $mail->hasTo('student@example.com') && strlen($mail->otp) === 6
         );
+    }
+
+    public function test_admin_can_decline_registration_and_student_receives_email(): void
+    {
+        Mail::fake();
+        $course = Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
+        $studentUser = User::factory()->create([
+            'role' => 'student',
+            'email' => 'student@example.com',
+            'email_verified_at' => now(),
+            'registration_verified_at' => null,
+        ]);
+        $section = Section::create(['course_id' => $course->id, 'name' => 'A', 'year_level' => 1, 'is_active' => true]);
+        $student = Student::create([
+            'user_id' => $studentUser->id,
+            'student_number' => '2026-2001',
+            'course_id' => $course->id,
+            'section_id' => $section->id,
+            'year_level' => 1,
+        ]);
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+
+        $this->actingAs($admin)->patch(route('admin.students.decline', $student), [
+            'reason' => 'The uploaded assessment form does not match the supplied student ID.',
+        ])->assertSessionHas('success');
+
+        $studentUser->refresh();
+        $this->assertNotNull($studentUser->registration_declined_at);
+        $this->assertFalse($studentUser->is_active);
+        $this->assertSame('The uploaded assessment form does not match the supplied student ID.', $studentUser->registration_decline_reason);
+        Mail::assertSent(StudentRegistrationDeclined::class, fn ($mail) => $mail->hasTo('student@example.com'));
+
+        auth()->logout();
+        $this->post(route('login.attempt'), [
+            'email' => 'student@example.com',
+            'password' => 'password',
+        ])->assertSessionHasErrors([
+            'email' => 'Your student registration was declined. Reason: The uploaded assessment form does not match the supplied student ID.',
+        ]);
+        $this->assertGuest();
     }
 
     public function test_irregular_student_selects_current_subjects_from_multiple_year_levels(): void

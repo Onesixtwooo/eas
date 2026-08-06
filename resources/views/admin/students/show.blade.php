@@ -18,7 +18,9 @@
             @csrf
             <button class="rounded-xl bg-[#123A63] px-4 py-2 text-sm font-semibold text-white hover:bg-[#245B8E]">Message</button>
         </form>
-        @if(! $student->user->registration_verified_at)
+        @if($student->user->registration_declined_at)
+            <span class="w-fit rounded-full bg-red-100 px-4 py-2 text-sm font-bold text-red-800">Registration Declined</span>
+        @elseif(! $student->user->registration_verified_at)
             <span class="w-fit rounded-full bg-amber-100 px-4 py-2 text-sm font-bold text-amber-800">Pending Verification</span>
         @else
             <span class="w-fit rounded-full px-4 py-2 text-sm font-bold {{ $student->user->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $student->user->is_active ? 'Active Account' : 'Inactive Account' }}</span>
@@ -76,13 +78,29 @@
             </div>
             <button class="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700">Save Year & Section</button>
         </form>
-        @if(! $student->user->registration_verified_at)
-            <form method="post" action="{{ route('admin.students.verify', $student) }}" onsubmit="return confirm('Confirm this student registration and allow portal login?')" class="rounded-2xl border border-amber-200 bg-amber-50 p-6">
-                @csrf @method('PATCH')
+        @if(! $student->user->registration_verified_at && ! $student->user->registration_declined_at)
+            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-6">
                 <h2 class="font-bold text-amber-900">Verification required</h2>
                 <p class="mt-2 text-sm text-amber-800">Review the student's information and assessment form before confirming the account.</p>
-                <button class="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700">Verify Student Registration</button>
-            </form>
+                <form method="post" action="{{ route('admin.students.verify', $student) }}" onsubmit="return confirm('Confirm this student registration and allow portal login?')">
+                    @csrf @method('PATCH')
+                    <button class="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700">Verify Student Registration</button>
+                </form>
+                <form method="post" action="{{ route('admin.students.decline', $student) }}" onsubmit="return confirm('Decline this registration and email the student?')" class="mt-5 border-t border-amber-200 pt-5">
+                    @csrf @method('PATCH')
+                    <label for="decline-reason">Reason for declining</label>
+                    <textarea id="decline-reason" name="reason" rows="4" maxlength="2000" required placeholder="Explain what the student needs to correct...">{{ old('reason') }}</textarea>
+                    @error('reason')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                    <button class="mt-3 w-full rounded-xl bg-red-600 px-4 py-3 font-semibold text-white hover:bg-red-700">Decline Registration & Send Email</button>
+                </form>
+            </div>
+        @elseif($student->user->registration_declined_at)
+            <div class="rounded-2xl border border-red-200 bg-red-50 p-6">
+                <h2 class="font-bold text-red-900">Registration declined</h2>
+                <p class="mt-2 text-sm text-red-700">The student was notified by email on {{ $student->user->registration_declined_at->format('M j, Y g:i A') }}.</p>
+                <p class="mt-3 text-sm font-semibold text-red-900">Reason</p>
+                <p class="mt-1 whitespace-pre-line text-sm text-red-800">{{ $student->user->registration_decline_reason }}</p>
+            </div>
         @endif
         <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 class="font-bold text-slate-900">Assessment form</h2>

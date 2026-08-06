@@ -82,6 +82,7 @@ Route::middleware('auth')->group(function () {
         Route::patch('/students/{student}/status', [AdminStudentController::class, 'toggleStatus'])->name('students.status');
         Route::patch('/students/{student}/academic-placement', [AdminStudentController::class, 'updateAcademicPlacement'])->name('students.academic-placement.update');
         Route::patch('/students/{student}/verify', [AdminStudentController::class, 'verify'])->name('students.verify');
+        Route::patch('/students/{student}/decline', [AdminStudentController::class, 'decline'])->name('students.decline');
         Route::delete('/students/{student}', [AdminStudentController::class, 'destroy'])->name('students.destroy');
         Route::get('/instructors/create', [InstructorController::class, 'create'])->name('instructors.create');
         Route::post('/instructors', [InstructorController::class, 'store'])->name('instructors.store');

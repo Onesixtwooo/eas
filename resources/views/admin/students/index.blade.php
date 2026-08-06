@@ -45,6 +45,7 @@
         <option value="active" @selected(request('status') === 'active')>Active</option>
         <option value="inactive" @selected(request('status') === 'inactive')>Inactive</option>
         <option value="pending" @selected(request('status') === 'pending')>Pending verification</option>
+        <option value="declined" @selected(request('status') === 'declined')>Declined registration</option>
     </select>
     <div class="flex gap-2">
         <button class="rounded-xl bg-[#123A63] px-6 font-semibold text-white">Filter</button>
@@ -85,7 +86,9 @@
                         </td>
                         <td class="px-5 py-4"><b>{{ $student->course->code }}</b><p class="text-xs text-slate-500">Year {{ $student->year_level }}, Section {{ $student->section->name }}</p></td>
                         <td class="px-5 py-4">
-                            @if(! $student->user->registration_verified_at)
+                            @if($student->user->registration_declined_at)
+                                <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-800">Declined</span>
+                            @elseif(! $student->user->registration_verified_at)
                                 <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">Pending verification</span>
                             @else
                                 <span class="rounded-full px-3 py-1 text-xs font-bold {{ $student->user->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $student->user->is_active ? 'Active' : 'Inactive' }}</span>
@@ -94,7 +97,7 @@
                         <td class="px-5 py-4">
                             <div class="flex justify-end gap-2">
                                 <a href="{{ route('admin.students.show', $student) }}" class="rounded-lg border px-3 py-2 font-semibold text-[#245B8E] hover:bg-blue-50">View</a>
-                                @if(! $student->user->registration_verified_at)
+                                @if(! $student->user->registration_verified_at && ! $student->user->registration_declined_at)
                                     <form method="post" action="{{ route('admin.students.verify', $student) }}" onsubmit="return confirm('Verify this student registration and allow login?')">
                                         @csrf @method('PATCH')
                                         <button class="rounded-lg bg-emerald-600 px-3 py-2 font-semibold text-white hover:bg-emerald-700">Verify</button>

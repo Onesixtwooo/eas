@@ -8,9 +8,11 @@ use App\Models\Section;
 use App\Models\Student;
 use App\Models\User;
 use App\Models\Course;
+use App\Mail\StudentRegistrationDeclined;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Mail;
 
 class StudentController extends Controller
 {
@@ -70,7 +72,8 @@ class StudentController extends Controller
             ->when($request->filled('section_id'), fn ($query) => $query->where('section_id', $request->integer('section_id')))
             ->when($request->status === 'active', fn ($query) => $query->whereHas('user', fn ($user) => $user->where('is_active', true)))
             ->when($request->status === 'inactive', fn ($query) => $query->whereHas('user', fn ($user) => $user->where('is_active', false)))
-            ->when($request->status === 'pending', fn ($query) => $query->whereHas('user', fn ($user) => $user->whereNull('registration_verified_at')))
+            ->when($request->status === 'pending', fn ($query) => $query->whereHas('user', fn ($user) => $user->whereNull('registration_verified_at')->whereNull('registration_declined_at')))
+            ->when($request->status === 'declined', fn ($query) => $query->whereHas('user', fn ($user) => $user->whereNotNull('registration_declined_at')))
             ->latest()
             ->paginate(15)
             ->withQueryString();
@@ -85,7 +88,7 @@ class StudentController extends Controller
             'total' => Student::count(),
             'active' => Student::whereHas('user', fn ($query) => $query->where('is_active', true))->count(),
             'inactive' => Student::whereHas('user', fn ($query) => $query->where('is_active', false))->count(),
-            'pending' => Student::whereHas('user', fn ($query) => $query->whereNull('registration_verified_at'))->count(),
+            'pending' => Student::whereHas('user', fn ($query) => $query->whereNull('registration_verified_at')->whereNull('registration_declined_at'))->count(),
         ];
 
         return view('admin.students.index', compact('students', 'sections', 'summary'));
@@ -144,10 +147,35 @@ class StudentController extends Controller
     public function verify(Student $student)
     {
         if (! $student->user->registration_verified_at) {
-            $student->user->update(['registration_verified_at' => now()]);
+            $student->user->update([
+                'registration_verified_at' => now(),
+                'registration_declined_at' => null,
+                'registration_decline_reason' => null,
+            ]);
         }
 
         return back()->with('success', 'Student registration verified. The student can now sign in.');
+    }
+
+    public function decline(Request $request, Student $student)
+    {
+        $data = $request->validate([
+            'reason' => ['required', 'string', 'max:2000'],
+        ]);
+
+        if ($student->user->registration_verified_at) {
+            return back()->with('error', 'A verified registration cannot be declined.');
+        }
+
+        $student->user->update([
+            'registration_declined_at' => now(),
+            'registration_decline_reason' => trim($data['reason']),
+            'is_active' => false,
+        ]);
+
+        Mail::to($student->user->email)->send(new StudentRegistrationDeclined($student->user));
+
+        return back()->with('success', 'Student registration declined. A notification email was sent to the student.');
     }
 
     public function assessmentForm(Student $student)

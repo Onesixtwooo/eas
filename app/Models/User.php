@@ -26,6 +26,8 @@ class User extends Authenticatable
         'is_active',
         'email_verified_at',
         'registration_verified_at',
+        'registration_declined_at',
+        'registration_decline_reason',
         'email_verification_otp',
         'email_verification_otp_expires_at',
     ];
@@ -53,6 +55,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_active' => 'boolean',
             'registration_verified_at' => 'datetime',
+            'registration_declined_at' => 'datetime',
             'email_verification_otp_expires_at' => 'datetime',
         ];
     }
