@@ -65,9 +65,18 @@ class AdminRequestReviewTest extends TestCase
         $this->assertSame($admin->id, $request->reviewed_by);
         $this->assertSame('EAS-2026-CA-0001', $request->reference_number);
         $this->actingAs($admin)
+            ->get(route('requests.show', $request))
+            ->assertOk()
+            ->assertSee('Approved by '.$admin->name);
+        $this->actingAs($studentUser)
+            ->get(route('requests.show', $request))
+            ->assertOk()
+            ->assertDontSee('Approved by '.$admin->name);
+        $this->actingAs($admin)
             ->get(route('requests.slip', $request))
             ->assertOk()
             ->assertSee('SCAN TO VERIFY')
+            ->assertSee('To the following instructors of:')
             ->assertSee('data:image/svg+xml;base64,', false);
 
         $this->actingAs($admin)
@@ -153,7 +162,9 @@ class AdminRequestReviewTest extends TestCase
             ->assertSee('CONDITIONAL')
             ->assertSee('Under Constant Monitoring')
             ->assertSee('DR. MARIA SANTOS, MIT')
-            ->assertSee('8:00 AM to 9:30 AM')
+            ->assertSee('Request time:')
+            ->assertSee('8:00 AM')
+            ->assertDontSee('8:00 AM to 9:30 AM')
             ->assertSee('GE1')
             ->assertDontSee('Understanding the Self');
     }

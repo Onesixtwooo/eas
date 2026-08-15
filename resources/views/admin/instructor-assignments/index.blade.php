@@ -133,12 +133,12 @@
         <option value="">All year levels</option>
         @foreach(range(1, 5) as $year)<option value="{{ $year }}" @selected(request('year_level') == $year)>Year {{ $year }}</option>@endforeach
     </select>
-    <button class="rounded-xl bg-[#123A63] px-6 font-semibold text-white">Filter</button>
+    <button class="rounded-xl bg-[#123A63] px-6 py-3 font-semibold text-white sm:py-0">Filter</button>
 </form>
 
 <div class="mt-5 overflow-hidden rounded-2xl border bg-white shadow-sm">
-    <div class="overflow-x-auto">
-        <table class="w-full min-w-[850px] text-left text-sm">
+    <div class="instructor-table-wrap overflow-x-auto">
+        <table class="instructor-table w-full min-w-[850px] text-left text-sm">
             <thead class="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr><th class="px-5 py-4">Instructor</th><th class="px-5 py-4">Course</th><th class="px-5 py-4">Year Level</th><th class="px-5 py-4">Subject</th><th class="px-5 py-4">Status</th><th class="px-5 py-4 text-right">Actions</th></tr>
             </thead>
@@ -149,16 +149,16 @@
                         $allActive = $group->every(fn ($item) => $item->is_active);
                     @endphp
                     <tr class="hover:bg-slate-50">
-                        <td class="px-5 py-4 font-semibold">{{ $assignment->faculty->display_name }}</td>
-                        <td class="px-5 py-4">{{ $assignment->course->code }}</td>
-                        <td class="px-5 py-4">
+                        <td class="instructor-col-name px-5 py-4 font-semibold">{{ $assignment->faculty->display_name }}</td>
+                        <td class="instructor-col-course px-5 py-4">{{ $assignment->course->code }}</td>
+                        <td class="instructor-col-years px-5 py-4">
                             <div class="flex flex-wrap gap-2">
                                 @foreach($group->pluck('year_level')->unique()->sort() as $year)
                                     <span class="whitespace-nowrap rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-[#123A63]">Year {{ $year }}</span>
                                 @endforeach
                             </div>
                         </td>
-                        <td class="px-5 py-4">
+                        <td class="instructor-col-subjects px-5 py-4">
                             <div class="flex flex-wrap gap-2">
                                 @foreach($group->unique('subject_id')->sortBy('subject.code') as $item)
                                     <span class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
@@ -168,11 +168,11 @@
                                 @endforeach
                             </div>
                         </td>
-                        <td class="px-5 py-4">
+                        <td class="instructor-col-status px-5 py-4">
                             <span class="rounded-full px-3 py-1 text-xs font-bold {{ $allActive ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600' }}">{{ $allActive ? 'Active' : ($group->contains('is_active', true) ? 'Partially active' : 'Inactive') }}</span>
                         </td>
-                        <td class="px-5 py-4">
-                            <div class="flex justify-end gap-2">
+                        <td class="instructor-col-actions px-5 py-4">
+                            <div class="flex flex-wrap justify-end gap-2">
                                 <form method="post" action="{{ route('admin.instructor-assignments.group-toggle', [$assignment->faculty_id, $assignment->course_id]) }}">@csrf @method('PATCH')<button class="rounded-lg border px-3 py-2 font-semibold">{{ $allActive ? 'Disable All' : 'Enable All' }}</button></form>
                                 <a href="{{ route('admin.instructor-assignments.index', ['edit_faculty' => $assignment->faculty_id, 'edit_course' => $assignment->course_id]) }}" class="rounded-lg border border-[#123A63] px-3 py-2 font-semibold text-[#123A63] hover:bg-blue-50">Edit</a>
                                 <form method="post" action="{{ route('admin.instructor-assignments.group-destroy', [$assignment->faculty_id, $assignment->course_id]) }}" onsubmit="return confirm('Remove all years and subjects in this instructor assignment?')">@csrf @method('DELETE')<button class="rounded-lg bg-red-50 px-3 py-2 font-semibold text-red-700">Remove All</button></form>
@@ -187,4 +187,66 @@
     </div>
 </div>
 <div class="mt-5">{{ $assignments->links() }}</div>
+<style>
+@media (max-width: 767px) {
+    .instructor-table-wrap {
+        overflow: visible;
+        background: #f8fafc;
+    }
+    .instructor-table {
+        display: block;
+        min-width: 0;
+    }
+    .instructor-table thead {
+        display: none;
+    }
+    .instructor-table tbody {
+        display: grid;
+        gap: .75rem;
+        padding: .75rem;
+    }
+    .instructor-table tbody tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        overflow: hidden;
+        border: 1px solid #cbd5e1;
+        border-radius: .85rem;
+        background: #fff;
+    }
+    .instructor-table tbody td {
+        display: block;
+        min-width: 0;
+        border: 0;
+        padding: .8rem;
+    }
+    .instructor-table tbody td::before {
+        display: block;
+        margin-bottom: .4rem;
+        color: #64748b;
+        font-size: .65rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+    .instructor-col-name::before { content: "Instructor"; }
+    .instructor-col-course::before { content: "Course"; }
+    .instructor-col-years::before { content: "Year levels"; }
+    .instructor-col-subjects::before { content: "Subjects"; }
+    .instructor-col-status::before { content: "Status"; }
+    .instructor-col-actions::before { content: "Actions"; }
+    .instructor-col-years,
+    .instructor-col-subjects,
+    .instructor-col-status,
+    .instructor-col-actions {
+        grid-column: 1 / -1;
+        border-top: 1px solid #e2e8f0 !important;
+    }
+    .instructor-col-actions > div {
+        justify-content: flex-start;
+    }
+    .instructor-table td[colspan] {
+        grid-column: 1 / -1;
+    }
+}
+</style>
 @endsection

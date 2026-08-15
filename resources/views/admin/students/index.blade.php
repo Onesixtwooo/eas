@@ -48,7 +48,7 @@
         <option value="declined" @selected(request('status') === 'declined')>Declined registration</option>
     </select>
     <div class="flex gap-2">
-        <button class="rounded-xl bg-[#123A63] px-6 font-semibold text-white">Filter</button>
+        <button class="flex-1 rounded-xl bg-[#123A63] px-6 py-3 font-semibold text-white lg:flex-none lg:py-0">Filter</button>
         @if(request()->hasAny(['search', 'section_id', 'status']))
             <a href="{{ route('admin.students.index') }}" class="grid place-items-center rounded-xl border px-4 text-sm font-semibold">Clear</a>
         @endif
@@ -63,8 +63,8 @@
     </form>
     @error('student_ids')<div class="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ $message }}</div>@enderror
 <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <div class="overflow-x-auto">
-        <table class="w-full min-w-[760px] text-left text-sm">
+    <div class="student-table-wrap overflow-x-auto">
+        <table class="student-table w-full min-w-[760px] text-left text-sm">
             <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                     <th class="w-12 px-5 py-4"><input type="checkbox" class="size-4 w-auto rounded" aria-label="Select all students on this page" @change="toggleAll($event)" :checked="allIds.length > 0 && selected.length === allIds.length"></th>
@@ -77,15 +77,15 @@
             <tbody class="divide-y divide-slate-100">
                 @forelse($students as $student)
                     <tr class="hover:bg-slate-50">
-                        <td class="px-5 py-4"><input form="bulk-delete-form" type="checkbox" name="student_ids[]" value="{{ $student->id }}" x-model.number="selected" class="size-4 w-auto rounded" aria-label="Select {{ $student->user->name }}"></td>
-                        <td class="px-5 py-4">
+                        <td class="student-col-select px-5 py-4"><input form="bulk-delete-form" type="checkbox" name="student_ids[]" value="{{ $student->id }}" x-model.number="selected" class="size-4 w-auto rounded" aria-label="Select {{ $student->user->name }}"></td>
+                        <td class="student-col-identity px-5 py-4">
                             <div class="flex items-center gap-3">
                                 <span class="relative grid size-10 shrink-0 place-items-center rounded-full bg-[#123A63] font-bold text-white">{{ strtoupper(substr($student->user->name, 0, 1)) }}<span data-presence-user="{{ $student->user_id }}" title="Offline" class="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-white bg-slate-300"></span></span>
                                 <div><p class="font-semibold text-slate-900">{{ $student->user->name }}</p><p class="text-xs text-slate-500">{{ $student->user->email }}</p></div>
                             </div>
                         </td>
-                        <td class="px-5 py-4"><b>{{ $student->course->code }}</b><p class="text-xs text-slate-500">Year {{ $student->year_level }}, Section {{ $student->section->name }}</p></td>
-                        <td class="px-5 py-4">
+                        <td class="student-col-course px-5 py-4"><b>{{ $student->course->code }}</b><p class="text-xs text-slate-500">Year {{ $student->year_level }}, Section {{ $student->section->name }}</p></td>
+                        <td class="student-col-status px-5 py-4">
                             @if($student->user->registration_declined_at)
                                 <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-red-800">Declined</span>
                             @elseif(! $student->user->registration_verified_at)
@@ -94,8 +94,8 @@
                                 <span class="rounded-full px-3 py-1 text-xs font-bold {{ $student->user->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $student->user->is_active ? 'Active' : 'Inactive' }}</span>
                             @endif
                         </td>
-                        <td class="px-5 py-4">
-                            <div class="flex justify-end gap-2">
+                        <td class="student-col-actions px-5 py-4">
+                            <div class="flex flex-wrap justify-end gap-2">
                                 <a href="{{ route('admin.students.show', $student) }}" class="rounded-lg border px-3 py-2 font-semibold text-[#245B8E] hover:bg-blue-50">View</a>
                                 @if(! $student->user->registration_verified_at && ! $student->user->registration_declined_at)
                                     <form method="post" action="{{ route('admin.students.verify', $student) }}" onsubmit="return confirm('Verify this student registration and allow login?')">
@@ -124,6 +124,74 @@
 </div>
 
 <div class="mt-5">{{ $students->links() }}</div>
+<style>
+@media (max-width: 767px) {
+    .student-table-wrap {
+        overflow: visible;
+        background: #f8fafc;
+    }
+    .student-table {
+        display: block;
+        min-width: 0;
+    }
+    .student-table thead {
+        display: none;
+    }
+    .student-table tbody {
+        display: grid;
+        gap: .75rem;
+        padding: .75rem;
+    }
+    .student-table tbody tr {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        overflow: hidden;
+        border: 1px solid #cbd5e1;
+        border-radius: .85rem;
+        background: #fff;
+    }
+    .student-table tbody td {
+        display: block;
+        min-width: 0;
+        border: 0;
+        padding: .8rem;
+    }
+    .student-col-select {
+        display: grid !important;
+        place-items: center;
+        padding-right: 0 !important;
+    }
+    .student-col-identity {
+        overflow-wrap: anywhere;
+    }
+    .student-col-course,
+    .student-col-status,
+    .student-col-actions {
+        grid-column: 1 / -1;
+        border-top: 1px solid #e2e8f0 !important;
+    }
+    .student-col-course::before,
+    .student-col-status::before,
+    .student-col-actions::before {
+        display: block;
+        margin-bottom: .4rem;
+        color: #64748b;
+        font-size: .65rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+    .student-col-course::before { content: "Course & section"; }
+    .student-col-status::before { content: "Status"; }
+    .student-col-actions::before { content: "Actions"; }
+    .student-col-actions > div {
+        justify-content: flex-start;
+    }
+    .student-table td[colspan] {
+        grid-column: 1 / -1;
+    }
+}
+</style>
 <script>
 async function refreshStudentPresence() {
     try {

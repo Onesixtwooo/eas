@@ -26,7 +26,7 @@
         <option value="inactive" @selected(request('status') === 'inactive')>Inactive</option>
     </select>
     <div class="flex gap-2">
-        <button class="rounded-xl bg-[#123A63] px-6 font-semibold text-white">Filter</button>
+        <button class="flex-1 rounded-xl bg-[#123A63] px-6 py-3 font-semibold text-white lg:flex-none lg:py-0">Filter</button>
         @if(request()->hasAny(['search', 'role', 'status']))
             <a href="{{ route('admin.accounts.index') }}" class="grid place-items-center rounded-xl border px-4 text-sm font-semibold">Clear</a>
         @endif
@@ -34,8 +34,8 @@
 </form>
 
 <div class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <div class="overflow-x-auto">
-        <table class="w-full min-w-[720px] text-left text-sm">
+    <div class="account-table-wrap overflow-x-auto">
+        <table class="account-table w-full min-w-[720px] text-left text-sm">
             <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                     <th class="px-5 py-4">Account</th>
@@ -48,17 +48,17 @@
             <tbody class="divide-y divide-slate-100">
                 @forelse($accounts as $account)
                     <tr class="hover:bg-slate-50">
-                        <td class="px-5 py-4">
+                        <td class="account-col-identity px-5 py-4">
                             <div class="flex items-center gap-3">
                                 <span class="grid size-10 shrink-0 place-items-center rounded-full bg-[#123A63] font-bold text-white">{{ strtoupper(substr($account->name, 0, 1)) }}</span>
                                 <div><p class="font-semibold text-slate-900">{{ $account->name }}</p><p class="text-xs text-slate-500">{{ $account->email }}</p></div>
                             </div>
                         </td>
-                        <td class="px-5 py-4"><span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{{ ucwords(str_replace('_', ' ', $account->role)) }}</span></td>
-                        <td class="px-5 py-4"><span class="rounded-full px-3 py-1 text-xs font-bold {{ $account->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $account->is_active ? 'Can log in' : 'Disabled' }}</span></td>
-                        <td class="px-5 py-4 text-slate-600">{{ $account->created_at->format('M d, Y') }}</td>
-                        <td class="px-5 py-4">
-                            <div class="flex justify-end gap-2">
+                        <td class="account-col-role px-5 py-4"><span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{{ ucwords(str_replace('_', ' ', $account->role)) }}</span></td>
+                        <td class="account-col-access px-5 py-4"><span class="rounded-full px-3 py-1 text-xs font-bold {{ $account->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $account->is_active ? 'Can log in' : 'Disabled' }}</span></td>
+                        <td class="account-col-registered px-5 py-4 text-slate-600">{{ $account->created_at->format('M d, Y') }}</td>
+                        <td class="account-col-actions px-5 py-4">
+                            <div class="flex flex-wrap justify-end gap-2">
                                 <a href="{{ route('admin.accounts.edit', $account) }}" class="rounded-lg border px-3 py-2 font-semibold text-[#245B8E] hover:bg-blue-50">Edit</a>
                                 @if(!$account->is(auth()->user()))
                                     <form method="post" action="{{ route('admin.accounts.destroy', $account) }}" onsubmit="return confirm('Delete the account for {{ addslashes($account->name) }}? Linked profile records may also be removed. This cannot be undone.')">
@@ -78,4 +78,68 @@
 </div>
 
 <div class="mt-5">{{ $accounts->links() }}</div>
+<style>
+@media (max-width: 767px) {
+    .account-table-wrap {
+        overflow: visible;
+        background: #f8fafc;
+    }
+    .account-table {
+        display: block;
+        min-width: 0;
+    }
+    .account-table thead {
+        display: none;
+    }
+    .account-table tbody {
+        display: grid;
+        gap: .75rem;
+        padding: .75rem;
+    }
+    .account-table tbody tr {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        overflow: hidden;
+        border: 1px solid #cbd5e1;
+        border-radius: .85rem;
+        background: #fff;
+    }
+    .account-table tbody td {
+        display: block;
+        min-width: 0;
+        border: 0;
+        padding: .8rem;
+    }
+    .account-table tbody td::before {
+        display: block;
+        margin-bottom: .4rem;
+        color: #64748b;
+        font-size: .65rem;
+        font-weight: 700;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+    }
+    .account-col-identity {
+        grid-column: 1 / -1;
+        overflow-wrap: anywhere;
+    }
+    .account-col-identity::before { content: "Account"; }
+    .account-col-role::before { content: "Role"; }
+    .account-col-access::before { content: "Access"; }
+    .account-col-registered::before { content: "Registered"; }
+    .account-col-actions::before { content: "Actions"; }
+    .account-col-role,
+    .account-col-access,
+    .account-col-registered,
+    .account-col-actions {
+        border-top: 1px solid #e2e8f0 !important;
+    }
+    .account-col-actions > div {
+        justify-content: flex-start;
+    }
+    .account-table td[colspan] {
+        grid-column: 1 / -1;
+    }
+}
+</style>
 @endsection

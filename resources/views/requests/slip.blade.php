@@ -11,6 +11,16 @@
 </div>
 
 <article class="excuse-slip">
+    @php
+        $slipSubjects = $item->subjects->isNotEmpty() ? $item->subjects : collect([$item->subject]);
+        $slipFacilitators = $item->facilitators->isNotEmpty() ? $item->facilitators : collect([$item->facilitator]);
+        $recipientLines = $item->subjects->isNotEmpty()
+            ? $slipSubjects->map(function ($subject) use ($slipFacilitators) {
+                $facilitator = $slipFacilitators->firstWhere('id', $subject->pivot->facilitator_id);
+                return $subject->code.' — '.($facilitator?->display_name ?? 'Instructor');
+            })
+            : collect([$item->subject->code.' — '.$item->facilitator->display_name]);
+    @endphp
     <header class="slip-header">
         <img src="{{ asset('images.jpg') }}" alt="OLSHCO logo" class="slip-logo">
         <div class="slip-heading">
@@ -28,11 +38,12 @@
         </div>
 
         <div class="recipient">
-            <div class="form-row">
-                <span>To:</span>
-                <span class="fill-line">{{ $item->facilitator->display_name }}</span>
-            </div>
-            <em>Course Facilitator</em>
+            <strong>To the following instructors of:</strong>
+            <ul>
+                @foreach($recipientLines as $recipientLine)
+                    <li>{{ $recipientLine }}</li>
+                @endforeach
+            </ul>
         </div>
 
         <p>Dear <strong>Sir/Madam:</strong></p>
@@ -44,18 +55,18 @@
 
         <p class="sentence request-line">
             In this connection, please excuse me for failing to attend your class
-            <span class="fill-line class-line">{{ $item->subject->code }}</span>
+            <span class="fill-line class-line">{{ $slipSubjects->pluck('code')->join(', ') }}</span>
             last
             <span class="fill-line absence-line">{{ $item->absence_date->format('F d, Y') }}</span>.
         </p>
 
         <p class="sentence">
-            Class time:
+            Request time:
             <span class="fill-line reason-line">
-                @if($item->start_time && $item->end_time)
-                    {{ date('g:i A', strtotime($item->start_time)) }} to {{ date('g:i A', strtotime($item->end_time)) }}
+                @if($item->start_time)
+                    {{ date('g:i A', strtotime($item->start_time)) }}
                 @else
-                    Not specified
+                    Not recorded
                 @endif
             </span>
         </p>
@@ -221,17 +232,25 @@
         width: 1.95in;
     }
     .recipient {
-        width: 2.55in;
+        width: 100%;
         margin-bottom: .19in;
     }
-    .recipient .form-row .fill-line {
-        flex: 1;
-    }
-    .recipient em {
+    .recipient > strong {
         display: block;
-        margin-left: .27in;
+        margin-bottom: 3px;
+    }
+    .recipient ul {
+        margin: 0 0 0 .28in;
+        padding: 0;
+        columns: 2;
+        column-gap: .35in;
+    }
+    .recipient li {
+        margin-bottom: 2px;
         font-size: 13px;
-        line-height: 1.1;
+        line-height: 1.25;
+        break-inside: avoid;
+        overflow-wrap: anywhere;
     }
     .sentence {
         display: flex;
@@ -378,6 +397,9 @@
         .date-row,
         .recipient {
             margin-bottom: 3mm !important;
+        }
+        .recipient li {
+            font-size: 10px !important;
         }
         .respectfully {
             margin-top: 5mm !important;

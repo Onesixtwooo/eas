@@ -8,16 +8,19 @@
     <style>[x-cloak] { display: none !important; }</style>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
-<body x-data="{ menu: false }" class="min-h-screen">
+<body x-data="{ menu: false, menuTouchX: null }" @keydown.escape.window="menu = false" :class="{ 'overflow-hidden': menu }" class="min-h-screen">
     <div id="realtime-update" class="no-print fixed bottom-5 right-5 z-50 hidden max-w-sm rounded-2xl border border-blue-200 bg-white p-4 shadow-2xl">
         <p class="font-semibold text-slate-900">New system updates are available.</p>
         <p class="mt-1 text-sm text-slate-500">Refresh when ready. Your unsaved form entries will not be discarded automatically.</p>
         <button type="button" onclick="location.reload()" class="mt-3 rounded-lg bg-[#123A63] px-4 py-2 text-sm font-semibold text-white">Refresh page</button>
     </div>
-    <aside :class="menu ? 'translate-x-0' : '-translate-x-full'" class="no-print fixed inset-y-0 left-0 z-40 w-72 bg-[#123A63] text-white transition lg:translate-x-0">
+    <button type="button" x-cloak x-show="menu" x-transition.opacity @click="menu = false" class="no-print fixed inset-0 z-[35] bg-slate-950/50 lg:hidden" aria-label="Close menu"></button>
+    <aside id="mobile-navigation" :class="menu ? 'translate-x-0' : '-translate-x-full'" @touchstart.passive="menuTouchX = $event.touches[0].clientX" @touchend="if (menuTouchX !== null && $event.changedTouches[0].clientX < menuTouchX - 50) menu = false; menuTouchX = null" class="no-print fixed inset-y-0 left-0 z-40 w-72 max-w-[85vw] bg-[#123A63] text-white shadow-2xl transition-transform duration-200 lg:translate-x-0 lg:shadow-none">
         <div class="flex h-20 items-center gap-3 border-b border-white/10 px-6">
-            <img src="{{ asset('images.jpg') }}" alt="OLSHCO logo" class="size-11 rounded-full bg-white object-cover">
-            <div><b class="block">OLSHCO EAS</b><span class="text-xs text-blue-200">Academic Services Portal</span></div>
+            <button type="button" @click="menu = false" class="shrink-0 rounded-full lg:pointer-events-none" aria-label="Close menu">
+                <img src="{{ asset('images.jpg') }}" alt="OLSHCO logo" class="size-11 rounded-full bg-white object-cover">
+            </button>
+            <div class="min-w-0 flex-1"><b class="block">OLSHCO EAS</b><span class="text-xs text-blue-200">Academic Services Portal</span></div>
         </div>
         <nav class="h-[calc(100vh-5rem)] space-y-1 overflow-y-auto p-4 pb-24">
             @php($links = auth()->user()->role === 'student'
@@ -26,7 +29,7 @@
             @if(auth()->user()->role === 'student') @php($links[] = ['requests.create', 'Submit Excuse Slip', '+']) @endif
             @if(in_array(auth()->user()->role, ['student', 'admin', 'program_head'])) @php($links[] = ['messages.index', 'Messages', '#']) @endif
             @foreach($links as [$route, $label, $icon])
-                <a href="{{ route($route) }}" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs($route) || ($route === 'messages.index' && request()->routeIs('messages.*')) || ($route === 'admin.subjects.index' && request()->routeIs('admin.subjects.*')) ? 'bg-white text-[#123A63] shadow' : 'text-blue-100 hover:bg-white/10' }}">
+                <a href="{{ route($route) }}" @click="menu = false" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs($route) || ($route === 'messages.index' && request()->routeIs('messages.*')) || ($route === 'admin.subjects.index' && request()->routeIs('admin.subjects.*')) ? 'bg-white text-[#123A63] shadow' : 'text-blue-100 hover:bg-white/10' }}">
                     <span class="w-5 text-center text-lg">{{ $icon }}</span>{{ $label }}
                 </a>
             @endforeach
@@ -38,7 +41,7 @@
                     ['admin.subjects.index', 'Subjects', '#'],
                     ['admin.instructor-assignments.index', 'Instructor Assignments', '+'],
                 ] as [$route, $label, $icon])
-                    <a href="{{ route($route) }}" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs($route) || ($route === 'admin.subjects.index' && request()->routeIs('admin.subjects.*')) ? 'bg-white text-[#123A63] shadow' : 'text-blue-100 hover:bg-white/10' }}">
+                    <a href="{{ route($route) }}" @click="menu = false" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs($route) || ($route === 'admin.subjects.index' && request()->routeIs('admin.subjects.*')) ? 'bg-white text-[#123A63] shadow' : 'text-blue-100 hover:bg-white/10' }}">
                         <span class="w-5 text-center text-lg">{{ $icon }}</span>{{ $label }}
                     </a>
                 @endforeach
@@ -49,7 +52,7 @@
             @if(in_array(auth()->user()->role, ['admin', 'program_head'])) @php($accountLinks[] = ['admin.accounts.index', 'User Accounts', '@']) @endif
             @php($accountLinks[] = ['profile', 'Profile', 'O'])
             @foreach($accountLinks as [$route, $label, $icon])
-                <a href="{{ route($route) }}" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs($route) || ($route === 'admin.accounts.index' && request()->routeIs('admin.accounts.*')) ? 'bg-white text-[#123A63] shadow' : 'text-blue-100 hover:bg-white/10' }}">
+                <a href="{{ route($route) }}" @click="menu = false" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs($route) || ($route === 'admin.accounts.index' && request()->routeIs('admin.accounts.*')) ? 'bg-white text-[#123A63] shadow' : 'text-blue-100 hover:bg-white/10' }}">
                     <span class="w-5 text-center text-lg">{{ $icon }}</span>{{ $label }}
                 </a>
             @endforeach
@@ -60,10 +63,17 @@
         </form>
     </aside>
     <div class="lg:pl-72">
-        <header class="no-print sticky top-0 z-30 flex h-20 items-center justify-between border-b bg-white/95 px-4 backdrop-blur sm:px-8">
-            <button @click="menu = !menu" class="rounded-lg border p-2 lg:hidden">Menu</button>
-            <div><p class="text-xs font-semibold uppercase tracking-widest text-[#245B8E]">{{ str_replace('_', ' ', auth()->user()->role) }}</p><p class="font-semibold text-slate-800">{{ auth()->user()->name }}</p></div>
-            <div class="grid size-10 place-items-center rounded-full bg-[#123A63] font-bold text-white">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}</div>
+        <header class="no-print sticky top-0 z-30 flex h-20 items-center gap-3 border-b bg-white/95 px-4 backdrop-blur sm:gap-4 sm:px-8">
+            <button type="button" @click="menu = true" :aria-expanded="menu.toString()" aria-controls="mobile-navigation" class="grid size-10 shrink-0 place-items-center rounded-xl border border-slate-300 bg-white text-[#123A63] shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-4 focus:ring-blue-100 lg:hidden" aria-label="Open navigation menu">
+                <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" class="size-5" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+            </button>
+            <div class="min-w-0 flex-1">
+                <p class="truncate text-xs font-semibold uppercase tracking-widest text-[#245B8E]">{{ str_replace('_', ' ', auth()->user()->role) }}</p>
+                <p class="truncate font-semibold text-slate-800">{{ auth()->user()->name }}</p>
+            </div>
+            <div class="grid size-10 shrink-0 place-items-center rounded-full bg-[#123A63] font-bold text-white">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}</div>
         </header>
         <main class="p-4 sm:p-8">
             @if(session('success'))<div class="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">{{ session('success') }}</div>@endif

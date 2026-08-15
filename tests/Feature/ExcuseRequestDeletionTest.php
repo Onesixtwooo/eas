@@ -2,15 +2,39 @@
 
 namespace Tests\Feature;
 
-use App\Models\{AcademicYear, Course, ExcuseRequest, Faculty, InstructorAssignment, ReasonCategory, Section, Semester, Student, Subject, SupportingDocument, User};
+use App\Models\AcademicYear;
+use App\Models\Course;
+use App\Models\ExcuseRequest;
+use App\Models\Faculty;
+use App\Models\InstructorAssignment;
+use App\Models\ReasonCategory;
+use App\Models\Section;
+use App\Models\Semester;
+use App\Models\Student;
+use App\Models\Subject;
+use App\Models\SupportingDocument;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class ExcuseRequestDeletionTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Carbon::setTestNow('2026-08-15 07:30:00');
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
 
     public function test_admin_can_delete_a_request_and_its_attachment(): void
     {
@@ -141,6 +165,41 @@ class ExcuseRequestDeletionTest extends TestCase
             'action_by' => $studentUser->id,
             'remarks' => 'Request details and supporting attachment updated by student.',
         ]);
+    }
+
+    public function test_student_can_submit_one_request_for_multiple_subjects(): void
+    {
+        [$existing, $studentUser] = $this->makeRequest();
+        $existing->update(['status' => 'cancelled']);
+        $student = Student::findOrFail($existing->student_id);
+        $secondSubject = Subject::create(['code' => 'MULTI102', 'name' => 'Second Covered Class', 'course_id' => $student->course_id, 'year_level' => 1]);
+        InstructorAssignment::create(['faculty_id' => $existing->facilitator_id, 'course_id' => $student->course_id, 'subject_id' => $secondSubject->id, 'year_level' => 1, 'is_active' => true]);
+
+        $this->actingAs($studentUser)->post(route('requests.store'), [
+            'absence_date' => now()->toDateString(),
+            'subject_ids' => [$existing->subject_id, $secondSubject->id],
+            'reason_category_id' => $existing->reason_category_id,
+            'explanation' => 'One absence request should cover both of these scheduled subjects.',
+            'start_time' => '08:00',
+            'end_time' => '11:00',
+            'declaration' => '1',
+            'intent' => 'submit',
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $request = ExcuseRequest::where('status', 'submitted')->sole();
+        $this->assertSame('07:30', substr($request->start_time, 0, 5));
+        $this->assertSame('07:30', substr($request->end_time, 0, 5));
+        $this->assertEqualsCanonicalizing(
+            [$existing->subject_id, $secondSubject->id],
+            $request->subjects()->pluck('subjects.id')->all(),
+        );
+        $this->actingAs($studentUser)->get(route('requests.show', $request))
+            ->assertOk()->assertSee('DEL101')->assertSee('MULTI102');
+        $this->actingAs($studentUser)->get(route('requests.index'))
+            ->assertOk()
+            ->assertSee('2 classes')
+            ->assertSee('covered-classes-'.$request->id)
+            ->assertSee('Second Covered Class');
     }
 
     private function makeRequest(): array
