@@ -23,6 +23,8 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'roles',
+        'adviser_year_level',
         'is_active',
         'email_verified_at',
         'registration_verified_at',
@@ -54,6 +56,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_active' => 'boolean',
+            'roles' => 'array',
             'registration_verified_at' => 'datetime',
             'registration_declined_at' => 'datetime',
             'email_verification_otp_expires_at' => 'datetime',
@@ -62,7 +65,20 @@ class User extends Authenticatable
 
     public function student() { return $this->hasOne(Student::class); }
     public function faculty() { return $this->hasOne(Faculty::class); }
-    public function hasRole(string ...$roles): bool { return in_array($this->role, $roles, true); }
+    public function assignedRoles(): array
+    {
+        return array_values(array_unique($this->roles ?: [$this->getRawOriginal('role') ?: $this->role]));
+    }
+
+    public function hasRole(string ...$roles): bool
+    {
+        return (bool) array_intersect($this->assignedRoles(), $roles);
+    }
+
+    public function isDualRole(): bool
+    {
+        return count($this->assignedRoles()) > 1;
+    }
     public function maskedAdministrativeName(): string
     {
         $parts = collect(preg_split('/\s+/', trim($this->name)))->filter()->values();

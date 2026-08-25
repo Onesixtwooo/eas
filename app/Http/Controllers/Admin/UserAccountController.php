@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Mail\AdministratorAccountCreated;
 use App\Models\User;
+use App\Models\Faculty;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,7 +24,9 @@ class UserAccountController extends Controller
                     ->where('name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%"));
             })
-            ->when($request->filled('role'), fn ($query) => $query->where('role', $request->role))
+            ->when($request->filled('role'), fn ($query) => $query->where(fn ($roles) => $roles
+                ->whereJsonContains('roles', $request->role)
+                ->orWhere(fn ($legacy) => $legacy->whereNull('roles')->where('role', $request->role))))
             ->when($request->status === 'active', fn ($query) => $query->where('is_active', true))
             ->when($request->status === 'inactive', fn ($query) => $query->where('is_active', false))
             ->orderByRaw("case when role = 'admin' then 0 else 1 end")
@@ -33,13 +36,16 @@ class UserAccountController extends Controller
 
         return view('admin.accounts.index', [
             'accounts' => $accounts,
-            'roles' => User::query()->distinct()->orderBy('role')->pluck('role'),
+            'roles' => collect(['admin', 'program_head', 'faculty', 'adviser', 'student']),
         ]);
     }
 
     public function edit(User $account)
     {
-        return view('admin.accounts.edit', compact('account'));
+        return view('admin.accounts.edit', [
+            'account' => $account,
+            'unlinkedFaculty' => Faculty::whereNull('user_id')->orderBy('name')->get(),
+        ]);
     }
 
     public function create()
@@ -49,11 +55,20 @@ class UserAccountController extends Controller
 
     public function store(Request $request)
     {
+        if (! $request->has('roles') && $request->filled('role')) {
+            $request->merge(['roles' => [$request->input('role')]]);
+        }
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
-            'role' => ['required', Rule::in(['admin', 'program_head'])],
+            'roles' => ['required', 'array', 'min:1'],
+            'roles.*' => ['required', 'distinct', Rule::in(['admin', 'program_head', 'faculty', 'adviser'])],
+            'adviser_year_level' => [Rule::requiredIf(fn () => in_array('adviser', $request->input('roles', []), true)), 'nullable', 'integer', 'between:1,5'],
         ]);
+        $roles = array_values($data['roles']);
+        $data['role'] = $roles[0];
+        $data['roles'] = $roles;
+        $data['adviser_year_level'] = in_array('adviser', $roles, true) ? (int) $data['adviser_year_level'] : null;
 
         $password = Str::random(12);
 
@@ -62,6 +77,10 @@ class UserAccountController extends Controller
                 'password' => $password,
                 'is_active' => true,
             ]);
+
+            if ($administrator->hasRole('faculty')) {
+                Faculty::create(['user_id' => $administrator->id, 'name' => $administrator->name, 'designation' => 'Course Facilitator']);
+            }
 
             Mail::to($administrator->email)->send(
                 new AdministratorAccountCreated($administrator, $password)
@@ -73,23 +92,51 @@ class UserAccountController extends Controller
 
     public function update(Request $request, User $account)
     {
+        if (! $request->has('roles') && $request->filled('role')) {
+            $request->merge(['roles' => [$request->input('role')]]);
+        }
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($account)],
-            'role' => ['required', Rule::in(['admin', 'program_head', 'faculty', 'student'])],
+            'roles' => ['required', 'array', 'min:1'],
+            'roles.*' => ['required', 'distinct', Rule::in(['admin', 'program_head', 'faculty', 'adviser', 'student'])],
+            'adviser_year_level' => [Rule::requiredIf(fn () => in_array('adviser', $request->input('roles', []), true)), 'nullable', 'integer', 'between:1,5'],
             'is_active' => ['required', 'boolean'],
             'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'faculty_id' => ['nullable', Rule::exists('faculty', 'id')->whereNull('user_id')],
         ]);
 
-        if ($account->is($request->user()) && (! in_array($data['role'], ['admin', 'program_head'], true) || ! (bool) $data['is_active'])) {
+        $roles = array_values($data['roles']);
+        if (in_array('student', $roles, true) && count($roles) > 1) {
+            return back()->withErrors(['roles' => 'Student access cannot be combined with another role.'])->withInput();
+        }
+        $data['role'] = $roles[0];
+        $data['roles'] = $roles;
+        $data['adviser_year_level'] = in_array('adviser', $roles, true) ? (int) $data['adviser_year_level'] : null;
+
+        if ($account->is($request->user()) && (! array_intersect($roles, ['admin', 'program_head']) || ! (bool) $data['is_active'])) {
             return back()->withErrors(['is_active' => 'You cannot remove your own administrative access or disable your current account.'])->withInput();
         }
 
-        if (blank($data['password'])) {
+        if (blank($data['password'] ?? null)) {
             unset($data['password']);
         }
 
-        $account->update($data);
+        DB::transaction(function () use ($account, $data, $roles) {
+            $account->update($data);
+            if (in_array('faculty', $roles, true)) {
+                $faculty = $account->faculty;
+                if (! $faculty && filled($data['faculty_id'] ?? null)) {
+                    $faculty = Faculty::whereNull('user_id')->lockForUpdate()->findOrFail($data['faculty_id']);
+                }
+                $faculty ??= new Faculty;
+                $faculty->fill(['name' => $account->name, 'designation' => $faculty->designation ?: 'Course Facilitator']);
+                $faculty->user()->associate($account);
+                $faculty->save();
+            } elseif ($account->faculty) {
+                $account->faculty->update(['name' => $account->name]);
+            }
+        });
 
         return redirect()->route('admin.accounts.index')->with('success', 'User account updated.');
     }

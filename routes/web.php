@@ -5,6 +5,8 @@ use App\Http\Controllers\Admin\InstructorController;
 use App\Http\Controllers\Admin\StudentController as AdminStudentController;
 use App\Http\Controllers\Admin\SubjectController;
 use App\Http\Controllers\Admin\UserAccountController;
+use App\Http\Controllers\AccessModeController;
+use App\Http\Controllers\AdvisoryController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ExcuseRequestController;
@@ -14,6 +16,7 @@ use App\Http\Controllers\RealtimeController;
 use App\Http\Controllers\MessageController;
 use App\Http\Controllers\RegistrationController;
 use App\Http\Controllers\StudentEmailVerificationController;
+use App\Http\Controllers\StudentReportController;
 use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\WorkflowController;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +51,16 @@ Route::middleware('auth')->group(function () {
     Route::get('/messages/{student}/updates', [MessageController::class, 'updates'])->middleware('throttle:60,1')->name('messages.updates');
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/advisory', [AdvisoryController::class, 'index'])->middleware('role:adviser')->name('advisory.index');
+    Route::get('/advisory/absences', [AdvisoryController::class, 'absences'])->middleware('role:adviser')->name('advisory.absences');
+    Route::patch('/advisory/absences/{report}/comment', [AdvisoryController::class, 'comment'])->middleware('role:adviser')->name('advisory.absences.comment');
+    Route::patch('/advisory/absences/{report}/action', [AdvisoryController::class, 'action'])->middleware('role:adviser')->name('advisory.absences.action');
+    Route::middleware('role:faculty')->group(function () {
+        Route::get('/student-reports', [StudentReportController::class, 'index'])->name('student-reports.index');
+        Route::post('/student-reports', [StudentReportController::class, 'store'])->name('student-reports.store');
+    });
+    Route::get('/access-mode', [AccessModeController::class, 'create'])->name('access-mode.create');
+    Route::post('/access-mode', [AccessModeController::class, 'store'])->name('access-mode.store');
     Route::get('/requests', [ExcuseRequestController::class, 'index'])->name('requests.index');
     Route::put('/requests/settings', [ExcuseRequestSettingController::class, 'update'])->middleware('role:admin,program_head')->name('requests.settings.update');
     Route::middleware('role:student')->group(function () {
@@ -64,14 +77,17 @@ Route::middleware('auth')->group(function () {
     Route::get('/requests/{excuseRequest}/slip', [ExcuseRequestController::class, 'slip'])->name('requests.slip');
     Route::delete('/requests/{excuseRequest}', [ExcuseRequestController::class, 'destroy'])->middleware('role:admin,program_head')->name('requests.destroy');
     Route::post('/requests/{excuseRequest}/review', [WorkflowController::class, 'review'])->middleware('role:admin,program_head')->name('requests.review');
-    Route::post('/requests/{excuseRequest}/acknowledge', [WorkflowController::class, 'acknowledge'])->middleware('role:faculty')->name('requests.acknowledge');
-    Route::post('/requests/{excuseRequest}/complete', [WorkflowController::class, 'complete'])->middleware('role:faculty')->name('requests.complete');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'updateDetails'])->name('profile.update');
     Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
     Route::middleware('role:admin,program_head')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/', fn () => redirect()->route('admin.students.index'))->name('index');
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
+        Route::get('/faculty', [InstructorController::class, 'index'])->name('faculty.index');
+        Route::get('/faculty/create', [InstructorController::class, 'createAccount'])->name('faculty.create');
+        Route::post('/faculty', [InstructorController::class, 'storeAccount'])->name('faculty.store');
+        Route::get('/faculty/{faculty}/edit', [InstructorController::class, 'edit'])->name('faculty.edit');
+        Route::put('/faculty/{faculty}', [InstructorController::class, 'update'])->name('faculty.update');
         Route::get('/accounts', [UserAccountController::class, 'index'])->name('accounts.index');
         Route::get('/accounts/create', [UserAccountController::class, 'create'])->name('accounts.create');
         Route::post('/accounts', [UserAccountController::class, 'store'])->name('accounts.store');

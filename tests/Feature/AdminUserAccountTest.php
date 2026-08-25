@@ -182,4 +182,58 @@ class AdminUserAccountTest extends TestCase
             ->assertSessionHas('error');
         $this->assertDatabaseHas('users', ['id' => $admin->id]);
     }
+
+    public function test_admin_can_assign_dual_admin_and_faculty_roles(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $account = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $faculty = \App\Models\Faculty::create(['name' => $account->name, 'designation' => 'Instructor']);
+
+        $this->actingAs($admin)->put(route('admin.accounts.update', $account), [
+            'name' => $account->name,
+            'email' => $account->email,
+            'roles' => ['admin', 'faculty'],
+            'faculty_id' => $faculty->id,
+            'is_active' => '1',
+        ])->assertRedirect(route('admin.accounts.index'))->assertSessionHasNoErrors();
+
+        $account->refresh();
+        $this->assertSame(['admin', 'faculty'], $account->roles);
+        $this->assertTrue($faculty->is($account->faculty));
+        $this->assertSame($account->name, $account->faculty->name);
+    }
+
+    public function test_dual_role_user_can_switch_between_faculty_and_admin_access(): void
+    {
+        $account = User::factory()->create([
+            'role' => 'admin',
+            'roles' => ['admin', 'faculty'],
+            'is_active' => true,
+        ]);
+        \App\Models\Faculty::create(['user_id' => $account->id, 'name' => $account->name, 'designation' => 'Instructor']);
+
+        $this->actingAs($account)->post(route('access-mode.store'), ['role' => 'faculty'])
+            ->assertRedirect(route('dashboard'));
+        $this->withSession(['active_role' => 'faculty'])->actingAs($account)
+            ->get(route('admin.accounts.index'))->assertForbidden();
+        $this->withSession(['active_role' => 'admin'])->actingAs($account)
+            ->get(route('admin.accounts.index'))->assertOk();
+    }
+
+    public function test_access_mode_page_does_not_show_role_specific_navigation(): void
+    {
+        $account = User::factory()->create([
+            'role' => 'admin',
+            'roles' => ['admin', 'faculty'],
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($account)->get(route('access-mode.create'))
+            ->assertOk()
+            ->assertSee('Choose your access level')
+            ->assertSee('Logout')
+            ->assertSee(route('logout'), false)
+            ->assertDontSee('mobile-navigation', false)
+            ->assertDontSee('header-access-mode', false);
+    }
 }

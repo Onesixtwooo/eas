@@ -20,7 +20,7 @@ class AdministratorAccountCreated extends Mailable
 
     public function envelope(): Envelope
     {
-        return new Envelope(subject: 'Your administrative account');
+        return new Envelope(subject: 'Your OLSHCO EAS account');
     }
 
     public function content(): Content

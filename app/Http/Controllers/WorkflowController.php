@@ -17,20 +17,4 @@ class WorkflowController extends Controller
         return back()->with('success', 'Request status updated.');
     }
 
-    public function acknowledge(Request $r, ExcuseRequest $excuseRequest, RequestWorkflowService $flow)
-    {
-        abort_unless(auth()->user()->role === 'faculty' && ($excuseRequest->facilitator_id === auth()->user()->faculty->id || $excuseRequest->facilitators()->whereKey(auth()->user()->faculty->id)->exists()), 403);
-        $r->validate(['remarks' => 'nullable|string|max:1000']);
-        $flow->transition($excuseRequest, 'acknowledged', $r->remarks);
-
-        return back()->with('success', 'Slip acknowledged.');
-    }
-
-    public function complete(ExcuseRequest $excuseRequest, RequestWorkflowService $flow)
-    {
-        abort_unless(auth()->user()->role === 'faculty' && ($excuseRequest->facilitator_id === auth()->user()->faculty->id || $excuseRequest->facilitators()->whereKey(auth()->user()->faculty->id)->exists()), 403);
-        $flow->transition($excuseRequest, 'completed');
-
-        return back()->with('success','Request completed.');
-    }
 }

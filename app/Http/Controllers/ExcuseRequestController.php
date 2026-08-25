@@ -8,6 +8,8 @@ use App\Models\ExcuseRequest;
 use App\Models\InstructorAssignment;
 use App\Models\ReasonCategory;
 use App\Models\Semester;
+use App\Models\Section;
+use App\Models\Student;
 use App\Models\SupportingDocument;
 use App\Models\SystemSetting;
 use App\Services\RequestWorkflowService;
@@ -21,30 +23,125 @@ use Illuminate\Validation\ValidationException;
 
 class ExcuseRequestController extends Controller
 {
+    private const FACULTY_VISIBLE_STATUSES = ['approved', 'acknowledged', 'completed'];
+
     private function permitted(ExcuseRequest $e): bool
     {
         $u = auth()->user();
 
-        return $u->role === 'admin' || $u->role === 'program_head' || ($u->role === 'student' && $e->student_id === $u->student->id) || ($u->role === 'faculty' && ($e->facilitator_id === $u->faculty->id || $e->facilitators()->whereKey($u->faculty->id)->exists()));
+        return $u->role === 'admin' || $u->role === 'program_head' || ($u->role === 'student' && $e->student_id === $u->student->id) || ($u->role === 'faculty' && $u->faculty && in_array($e->status, self::FACULTY_VISIBLE_STATUSES, true) && ($e->facilitator_id === $u->faculty->id || $e->facilitators()->whereKey($u->faculty->id)->exists()));
     }
 
     public function index(Request $r)
     {
-        $q = ExcuseRequest::with(['student.user', 'subject', 'facilitator.user', 'subjects', 'facilitators.user']);
         $u = auth()->user();
+        abort_unless(in_array($u->role, ['admin', 'program_head', 'faculty', 'student'], true), 403);
+        $assignedSubjects = collect();
+        $selectedSubjectId = null;
+        $yearLevels = collect();
+        $selectedYearLevel = null;
+        $pendingCountsByYear = collect();
+        $pendingCountTotal = 0;
+        if ($u->role === 'faculty') {
+            abort_unless($u->faculty, 403, 'This faculty account is not linked to a faculty profile.');
+            $assignedSubjects = InstructorAssignment::query()
+                ->with('subject.course')
+                ->where('faculty_id', $u->faculty->id)
+                ->where('is_active', true)
+                ->get()
+                ->pluck('subject')
+                ->filter()
+                ->unique('id')
+                ->sortBy('code')
+                ->values();
+            if ($r->filled('subject_id')) {
+                $selectedSubjectId = $r->integer('subject_id');
+                abort_unless($assignedSubjects->contains('id', $selectedSubjectId), 404);
+            }
+        }
+        if (in_array($u->role, ['admin', 'program_head'], true)) {
+            $yearLevels = Section::query()
+                ->where('is_active', true)
+                ->distinct()
+                ->orderBy('year_level')
+                ->pluck('year_level');
+            if ($yearLevels->isEmpty()) {
+                $yearLevels = collect(range(1, 5));
+            }
+            if ($r->filled('year_level')) {
+                $selectedYearLevel = $r->integer('year_level');
+                abort_unless($yearLevels->contains($selectedYearLevel), 404);
+            }
+            $pendingCountsByYear = ExcuseRequest::query()
+                ->join('students', 'students.id', '=', 'excuse_requests.student_id')
+                ->whereIn('excuse_requests.status', ['submitted', 'under_review'])
+                ->selectRaw('students.year_level, count(*) as total')
+                ->groupBy('students.year_level')
+                ->pluck('total', 'students.year_level');
+            $pendingCountTotal = (int) $pendingCountsByYear->sum();
+        }
+        $applyFilters = function ($q) use ($r, $u, $selectedSubjectId) {
+            if ($u->role === 'faculty') {
+                $q->whereIn('status', self::FACULTY_VISIBLE_STATUSES)
+                    ->where(fn ($x) => $x->where('facilitator_id', $u->faculty->id)->orWhereHas('facilitators', fn ($y) => $y->whereKey($u->faculty->id)));
+                if ($selectedSubjectId) {
+                    $q->where(fn ($request) => $request
+                        ->where('subject_id', $selectedSubjectId)
+                        ->orWhereHas('subjects', fn ($subject) => $subject->whereKey($selectedSubjectId)));
+                }
+            }
+            if ($u->role === 'student' && $r->filled('status')) {
+                $q->where('status', $r->status);
+            }
+            if ($r->filled('search')) {
+                $search = trim($r->search);
+                $q->where(fn ($x) => $x->where('reference_number', 'like', '%'.$search.'%')
+                    ->orWhereHas('subjects', fn ($y) => $y->where('code', 'like', '%'.$search.'%')->orWhere('name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('subject', fn ($y) => $y->where('code', 'like', '%'.$search.'%')->orWhere('name', 'like', '%'.$search.'%'))
+                    ->orWhereHas('student', fn ($y) => $y->where('student_number', 'like', '%'.$search.'%')->orWhereHas('user', fn ($z) => $z->where('name', 'like', '%'.$search.'%'))));
+            }
+        };
+
         if ($u->role === 'student') {
-            $q->where('student_id', $u->student->id);
-        }if ($u->role === 'faculty') {
-            $q->where(fn ($x) => $x->where('facilitator_id', $u->faculty->id)->orWhereHas('facilitators', fn ($y) => $y->whereKey($u->faculty->id)));
-        }if ($r->filled('status')) {
-            $q->where('status', $r->status);
-        }if ($r->filled('search')) {
-            $search = trim($r->search);
-            $q->where(fn ($x) => $x->where('reference_number', 'like', '%'.$search.'%')->orWhereHas('subjects', fn ($y) => $y->where('code', 'like', '%'.$search.'%')->orWhere('name', 'like', '%'.$search.'%'))->orWhereHas('subject', fn ($y) => $y->where('code', 'like', '%'.$search.'%')->orWhere('name', 'like', '%'.$search.'%'))->when($u->role !== 'student', fn ($y) => $y->orWhereHas('student.user', fn ($z) => $z->where('name', 'like', '%'.$search.'%'))));
-        }$requests = $q->latest()->paginate(15)->withQueryString();
+            $q = ExcuseRequest::with(['student.user', 'subject', 'facilitator.user', 'subjects', 'facilitators.user'])
+                ->where('student_id', $u->student->id);
+            $applyFilters($q);
+            $requests = $q->latest()->paginate(15)->withQueryString();
+            $studentGroups = null;
+        } else {
+            $selectedStatus = $r->input('status', $u->role === 'faculty' ? 'confirmed' : 'pending');
+            $groupFilters = function ($q) use ($applyFilters, $selectedStatus) {
+                $applyFilters($q);
+                if ($selectedStatus === 'pending') {
+                    $q->whereIn('status', ['submitted', 'under_review']);
+                } elseif ($selectedStatus === 'confirmed') {
+                    $q->whereIn('status', self::FACULTY_VISIBLE_STATUSES);
+                } elseif ($selectedStatus !== 'all') {
+                    $q->where('status', $selectedStatus);
+                }
+            };
+            $countScope = $u->role === 'faculty' ? $applyFilters : fn ($q) => $q;
+            $approvedStatuses = $u->role === 'faculty' ? self::FACULTY_VISIBLE_STATUSES : ['approved'];
+            $studentGroups = Student::query()
+                ->when($selectedYearLevel, fn ($q) => $q->where('year_level', $selectedYearLevel))
+                ->whereHas('requests', $groupFilters)
+                ->with('user')
+                ->withCount(['requests as requests_count' => $countScope])
+                ->withCount(['requests as pending_requests_count' => function ($q) use ($countScope) { $countScope($q); $q->whereIn('status', ['submitted', 'under_review']); }])
+                ->withCount(['requests as approved_requests_count' => function ($q) use ($countScope, $approvedStatuses) { $countScope($q); $q->whereIn('status', $approvedStatuses); }])
+                ->with(['requests' => function ($q) use ($groupFilters) {
+                    $groupFilters($q);
+                    $q->with(['subject', 'facilitator.user', 'subjects', 'facilitators.user'])
+                        ->latest();
+                }])
+                ->withMax(['requests as latest_request_at' => $groupFilters], 'created_at')
+                ->orderByDesc('latest_request_at')
+                ->paginate(15)->withQueryString();
+            $requests = null;
+        }
         $programHeadName = SystemSetting::valueFor('program_head_name', 'PRINCESS LEA ANN D. CALINA, MSIT');
 
-        return view('requests.index', compact('requests', 'programHeadName'));
+        return view('requests.index', compact('requests', 'studentGroups', 'programHeadName', 'assignedSubjects', 'selectedSubjectId', 'yearLevels', 'selectedYearLevel', 'pendingCountsByYear', 'pendingCountTotal'));
     }
 
     public function create()

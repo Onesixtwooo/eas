@@ -15,8 +15,7 @@ class RequestWorkflowService
         'submitted' => ['under_review', 'cancelled'],
         'under_review' => ['approved', 'returned', 'rejected'],
         'rejected' => ['under_review', 'approved', 'returned'],
-        'approved' => ['approved', 'under_review', 'returned', 'rejected', 'acknowledged'],
-        'acknowledged' => ['completed'],
+        'approved' => ['approved', 'under_review', 'returned', 'rejected'],
     ];
 
     public function transition(ExcuseRequest $request, string $to, ?string $remarks = null, ?string $slipRemark = null): ExcuseRequest

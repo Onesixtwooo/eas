@@ -15,6 +15,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->web(append: [
+            \App\Http\Middleware\ApplyActiveRole::class,
             \App\Http\Middleware\EnsureAccountIsActive::class,
             \App\Http\Middleware\TrackSystemChanges::class,
             \App\Http\Middleware\PreventAuthenticatedPageCaching::class,

@@ -8,19 +8,39 @@
         @foreach($item->documents as $document)
             <div class="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
                 @if(str_starts_with($document->mime_type, 'image/'))
-                    <a href="{{ route('requests.documents.show', $document) }}" target="_blank" rel="noopener">
+                    <button type="button" onclick="document.getElementById('attachment-preview-{{ $document->id }}').showModal()" class="block w-full cursor-zoom-in bg-white" aria-label="Preview {{ $document->original_name }}">
                         <img src="{{ route('requests.documents.show', $document) }}" alt="{{ $document->original_name }}" class="max-h-96 w-full bg-white object-contain">
-                    </a>
+                    </button>
                 @else
                     <div class="grid min-h-40 place-items-center p-6 text-center"><span class="text-4xl">📄</span><p class="mt-2 text-sm font-semibold text-slate-700">{{ $document->original_name }}</p></div>
                 @endif
-                <div class="flex items-center justify-between gap-3 border-t bg-white p-3"><span class="truncate text-xs text-slate-500">{{ $document->original_name }}</span><a href="{{ route('requests.documents.show', $document) }}" target="_blank" rel="noopener" class="shrink-0 text-sm font-semibold text-[#245B8E]">View file</a></div>
+                <div class="flex items-center justify-between gap-3 border-t bg-white p-3">
+                    <span class="truncate text-xs text-slate-500">{{ $document->original_name }}</span>
+                    @if(str_starts_with($document->mime_type, 'image/'))
+                        <button type="button" onclick="document.getElementById('attachment-preview-{{ $document->id }}').showModal()" class="shrink-0 text-sm font-semibold text-[#245B8E]">View image</button>
+                    @else
+                        <a href="{{ route('requests.documents.show', $document) }}" target="_blank" rel="noopener" class="shrink-0 text-sm font-semibold text-[#245B8E]">View file</a>
+                    @endif
+                </div>
             </div>
+            @if(str_starts_with($document->mime_type, 'image/'))
+                <dialog id="attachment-preview-{{ $document->id }}" onclick="if (event.target === this) this.close()" class="m-auto max-h-[calc(100vh-2rem)] w-[min(72rem,calc(100%-2rem))] overflow-hidden rounded-2xl border-0 bg-white p-0 shadow-2xl backdrop:bg-slate-950/80">
+                    <div class="flex max-h-[calc(100vh-2rem)] flex-col">
+                        <div class="flex items-center justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5">
+                            <h3 class="truncate font-semibold text-slate-900">{{ $document->original_name }}</h3>
+                            <button type="button" onclick="document.getElementById('attachment-preview-{{ $document->id }}').close()" class="grid size-10 shrink-0 place-items-center rounded-full text-2xl leading-none text-slate-500 hover:bg-slate-100 hover:text-slate-900" aria-label="Close image preview">&times;</button>
+                        </div>
+                        <div class="grid min-h-0 flex-1 place-items-center overflow-auto bg-slate-950 p-2 sm:p-4">
+                            <img src="{{ route('requests.documents.show', $document) }}" alt="{{ $document->original_name }}" class="max-h-[calc(100vh-7rem)] max-w-full object-contain">
+                        </div>
+                    </div>
+                </dialog>
+            @endif
         @endforeach
     </div>
 </section>
 @endif
 @if(in_array(auth()->user()->role,['admin','program_head'],true)&&in_array($item->status,['submitted','under_review','rejected','approved']))<form method="post" action="{{ route('requests.review',$item) }}" class="rounded-2xl border bg-white p-6 shadow-sm">@csrf<h2 class="text-lg font-bold text-[#123A63]">{{ $item->status === 'rejected' ? 'Reverse Rejected Request' : ($item->status === 'approved' ? 'Change Approved Request' : 'Request Review') }}</h2>@if($item->status === 'rejected')<p class="mt-2 text-sm text-slate-500">This request was rejected. You may reverse that decision or reopen the review.</p>@elseif($item->status === 'approved')<p class="mt-2 text-sm text-slate-500">You may update the slip result or reverse this approval.</p>@endif @if($item->status!=='submitted')<label class="mt-5" for="slip-remark">Slip remark</label><select id="slip-remark" name="slip_remark" class="@error('slip_remark') border-red-500 @enderror"><option value="">Select the result printed on the slip</option>@foreach(['EXCUSED','UNEXCUSED','CONDITIONAL'] as $remark)<option value="{{ $remark }}" @selected(old('slip_remark',$item->slip_remark)===$remark)>{{ $remark }}</option>@endforeach</select>@error('slip_remark')<p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p>@enderror @endif<label class="mt-5" for="review-remarks">Official remarks</label><textarea id="review-remarks" name="remarks" rows="4" placeholder="Required when returning or rejecting" class="@error('remarks') border-red-500 @enderror">{{ old('remarks') }}</textarea>@error('remarks')<p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p>@enderror @error('decision')<p class="mt-2 text-sm font-semibold text-red-600">{{ $message }}</p>@enderror<div class="mt-4 flex flex-wrap gap-2">@if($item->status==='submitted')<button type="submit" name="decision" value="under_review" class="rounded-xl bg-amber-500 px-4 py-2 font-semibold text-white">Start Review</button>@else<button type="submit" name="decision" value="approved" onclick="document.getElementById('review-remarks').required=false;document.getElementById('slip-remark').required=true" class="rounded-xl bg-emerald-600 px-4 py-2 font-semibold text-white">{{ $item->status === 'rejected' ? 'Reverse to Approved' : ($item->status === 'approved' ? 'Update Approval' : 'Approve') }}</button><button type="submit" name="decision" value="returned" onclick="document.getElementById('review-remarks').required=true;document.getElementById('slip-remark').required=false" class="rounded-xl bg-orange-500 px-4 py-2 font-semibold text-white">{{ in_array($item->status,['rejected','approved']) ? 'Reverse to Returned' : 'Return' }}</button>@if(in_array($item->status,['rejected','approved']))<button type="submit" name="decision" value="under_review" onclick="document.getElementById('review-remarks').required=false;document.getElementById('slip-remark').required=false" class="rounded-xl bg-amber-500 px-4 py-2 font-semibold text-white">Reopen Review</button>@endif @if($item->status !== 'rejected')<button type="submit" name="decision" value="rejected" onclick="document.getElementById('review-remarks').required=true;document.getElementById('slip-remark').required=false" class="rounded-xl bg-red-600 px-4 py-2 font-semibold text-white">{{ $item->status === 'approved' ? 'Reverse to Rejected' : 'Reject' }}</button>@endif @endif</div></form>@endif
-@if(auth()->user()->role==='faculty'&&$item->status==='approved')<form method="post" action="{{ route('requests.acknowledge',$item) }}" class="rounded-2xl border bg-white p-6">@csrf<h2 class="font-bold text-[#123A63]">Facilitator Acknowledgment</h2><textarea class="mt-4" name="remarks" placeholder="Optional remarks"></textarea><button class="mt-4 rounded-xl bg-indigo-600 px-5 py-3 font-semibold text-white">Acknowledge & Admit Student</button></form>@elseif(auth()->user()->role==='faculty'&&$item->status==='acknowledged')<form method="post" action="{{ route('requests.complete',$item) }}">@csrf<button class="rounded-xl bg-[#123A63] px-5 py-3 font-semibold text-white">Mark Request Completed</button></form>@endif</div>
+</div>
 <aside class="rounded-2xl border bg-white p-6 shadow-sm"><h2 class="font-bold text-[#123A63]">Status Timeline</h2><div class="mt-6 space-y-0">@foreach($item->histories->reverse() as $h)<div class="relative border-l-2 border-blue-200 pb-7 pl-6 last:pb-0"><span class="absolute -left-[7px] top-0 size-3 rounded-full bg-[#245B8E] ring-4 ring-blue-50"></span><b class="block text-sm">{{ ucwords(str_replace('_',' ',$h->new_status)) }}</b><span class="text-xs text-slate-400">{{ $h->created_at->format('M d, Y • g:i A') }}</span>@if($h->new_status === 'approved' && in_array(auth()->user()->role, ['admin', 'program_head'], true))<p class="mt-1 text-xs font-semibold text-emerald-700">Approved by {{ $h->actor?->name ?? 'Former user' }}</p>@endif<p class="mt-1 text-xs text-slate-500">{{ $h->remarks }}</p></div>@endforeach</div></aside></div>
 @endsection

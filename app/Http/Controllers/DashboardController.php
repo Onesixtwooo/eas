@@ -11,13 +11,34 @@ class DashboardController extends Controller {
             return redirect()->route('requests.index');
         }
 
+        if ($u->role === 'adviser') {
+            return redirect()->route('advisory.index');
+        }
+
         $query = ExcuseRequest::query();
 
-        if ($u->role === 'faculty') $query->where('facilitator_id', $u->faculty->id);
+        if ($u->role === 'faculty') {
+            abort_unless($u->faculty, 403, 'This faculty account is not linked to a faculty profile.');
+            $query->where(fn ($request) => $request
+                ->where('facilitator_id', $u->faculty->id)
+                ->orWhereHas('facilitators', fn ($faculty) => $faculty->whereKey($u->faculty->id)))
+                ->whereIn('status', ['approved', 'acknowledged', 'completed']);
+        }
 
-        $requests = (clone $query)->with(['student.user', 'subject', 'facilitator.user'])->latest()->take(8)->get();
+        $recentRequestsQuery = clone $query;
+        if ($u->role === 'faculty') {
+            $recentRequestsQuery->where('status', 'approved');
+        }
+        $requests = $recentRequestsQuery->with(['student.user', 'subject', 'facilitator.user'])
+            ->latest()
+            ->take(40)
+            ->get()
+            ->unique('student_id')
+            ->take(8)
+            ->values();
         $counts = (clone $query)->toBase()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
         $totalRequests = (clone $query)->count();
+        $assignedStudents = (clone $query)->distinct()->count('student_id');
         $excusedStudents = (clone $query)->where('slip_remark', 'EXCUSED')->whereIn('status', ['approved', 'acknowledged', 'completed'])->distinct()->count('student_id');
         $lateStudents = (clone $query)->whereNotNull('submitted_at')->whereRaw('DATE(submitted_at) > absence_date')->distinct()->count('student_id');
 
@@ -30,9 +51,10 @@ class DashboardController extends Controller {
             ->where(function ($request) use ($periods) {
                 $analyticsStart = $periods['month']->first()->copy()->startOfMonth();
                 $request->where('submitted_at', '>=', $analyticsStart)
-                    ->orWhere('approved_at', '>=', $analyticsStart);
+                    ->orWhere('approved_at', '>=', $analyticsStart)
+                    ->orWhere('completed_at', '>=', $analyticsStart);
             })
-            ->get(['student_id', 'absence_date', 'submitted_at', 'approved_at', 'status', 'slip_remark']);
+            ->get(['student_id', 'absence_date', 'submitted_at', 'approved_at', 'completed_at', 'status', 'slip_remark']);
         $analyticsByPeriod = collect($periods)->map(function ($buckets, $period) use ($analyticsRequests) {
             return $buckets->map(function (Carbon $start) use ($analyticsRequests, $period) {
                 $end = match ($period) {
@@ -51,6 +73,12 @@ class DashboardController extends Controller {
                         && $request->slip_remark === 'EXCUSED'
                         && in_array($request->status, ['approved', 'acknowledged', 'completed'], true))
                     ->unique('student_id')->count();
+                $confirmed = $analyticsRequests
+                    ->filter(fn ($request) => $request->approved_at && $request->approved_at->betweenIncluded($start, $end))
+                    ->count();
+                $completed = $analyticsRequests
+                    ->filter(fn ($request) => $request->completed_at && $request->completed_at->betweenIncluded($start, $end))
+                    ->count();
 
                 $label = match ($period) {
                     'day' => $start->format('D j'),
@@ -58,13 +86,13 @@ class DashboardController extends Controller {
                     default => $start->format('M'),
                 };
 
-                return ['label' => $label, 'late' => $late, 'excused' => $excused];
+                return ['label' => $label, 'late' => $late, 'excused' => $excused, 'confirmed' => $confirmed, 'completed' => $completed];
             })->values();
         });
         // Keep the monthly variables available for existing integrations.
         $analytics = $analyticsByPeriod['month'];
         $analyticsMax = max(1, (int) $analytics->flatMap(fn ($bucket) => [$bucket['late'], $bucket['excused']])->max());
 
-        return view('dashboard', compact('requests', 'counts', 'totalRequests', 'excusedStudents', 'lateStudents', 'analytics', 'analyticsByPeriod', 'analyticsMax', 'u'));
+        return view('dashboard', compact('requests', 'counts', 'totalRequests', 'assignedStudents', 'excusedStudents', 'lateStudents', 'analytics', 'analyticsByPeriod', 'analyticsMax', 'u'));
     }
 }

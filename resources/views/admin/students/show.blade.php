@@ -131,4 +131,35 @@
         </form>
     </aside>
 </div>
+
+<section id="request-history" class="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-6 py-5">
+        <div>
+            <h2 class="text-lg font-bold text-[#123A63]">Excuse Request History</h2>
+            <p class="mt-1 text-sm text-slate-500">All previous and current requests submitted by this student.</p>
+        </div>
+        <span class="rounded-full bg-slate-100 px-3 py-1 text-sm font-bold text-slate-700">{{ $student->requests_count }} total</span>
+    </div>
+    <div class="overflow-x-auto">
+        <table class="w-full min-w-[720px] text-left text-sm">
+            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr><th class="px-5 py-3">Reference</th><th class="px-5 py-3">Absence date</th><th class="px-5 py-3">Classes</th><th class="px-5 py-3">Status</th><th class="px-5 py-3"><span class="sr-only">Action</span></th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200">
+                @forelse($student->requests as $item)
+                    @php($historySubjects = $item->subjects->isNotEmpty() ? $item->subjects : collect([$item->subject]))
+                    <tr class="hover:bg-slate-50">
+                        <td class="px-5 py-4 font-semibold text-[#123A63]">{{ $item->reference_number ?? 'Awaiting reference' }}<span class="mt-1 block text-xs font-normal text-slate-500">Submitted {{ $item->submitted_at?->format('M d, Y') ?? '—' }}</span></td>
+                        <td class="px-5 py-4 text-slate-800">{{ $item->absence_date->format('M d, Y') }}</td>
+                        <td class="px-5 py-4 text-slate-700">{{ $historySubjects->count() }} {{ Str::plural('class', $historySubjects->count()) }}</td>
+                        <td class="px-5 py-4">@include('requests._badge', ['status' => $item->status])</td>
+                        <td class="px-5 py-4 text-right"><a href="{{ route('requests.show', $item) }}" class="inline-flex rounded-lg border border-slate-200 px-3 py-2 font-semibold text-[#245B8E] hover:bg-slate-50">View</a></td>
+                    </tr>
+                @empty
+                    <tr><td colspan="5" class="px-6 py-12 text-center text-slate-400">This student has no excuse requests.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </div>
+</section>
 @endsection

@@ -25,6 +25,7 @@ class AdminRequestReviewTest extends TestCase
         $studentUser = User::factory()->create(['name' => 'Antolin Catabona', 'role' => 'student', 'is_active' => true]);
         $course = Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
         $section = Section::create(['course_id' => $course->id, 'name' => 'A', 'year_level' => 1]);
+        Section::create(['course_id' => $course->id, 'name' => 'B', 'year_level' => 2]);
         $student = Student::create([
             'user_id' => $studentUser->id,
             'student_number' => '2026-0100',
@@ -55,6 +56,19 @@ class AdminRequestReviewTest extends TestCase
         $this->actingAs($admin)
             ->post(route('requests.review', $request), ['decision' => 'under_review'])
             ->assertSessionHasNoErrors();
+
+        $this->actingAs($admin)->get(route('requests.index', ['year_level' => 1]))
+            ->assertOk()
+            ->assertSee('All Years')
+            ->assertSee('Year 1')
+            ->assertSee('Year 2')
+            ->assertSee('Antolin Catabona')
+            ->assertViewHas('selectedYearLevel', 1)
+            ->assertViewHas('pendingCountTotal', 1)
+            ->assertViewHas('pendingCountsByYear', fn ($counts) => (int) $counts->get(1) === 1);
+        $this->actingAs($admin)->get(route('requests.index', ['year_level' => 2]))
+            ->assertOk()
+            ->assertDontSee('Antolin Catabona');
 
         $this->actingAs($admin)
             ->post(route('requests.review', $request->fresh()), ['decision' => 'approved', 'slip_remark' => 'EXCUSED'])

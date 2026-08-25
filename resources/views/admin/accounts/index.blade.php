@@ -7,7 +7,7 @@
     <div>
         <p class="text-sm font-semibold uppercase tracking-widest text-[#245B8E]">Account</p>
         <h1 class="mt-1 text-3xl font-bold text-slate-900">User Accounts</h1>
-        <p class="mt-2 text-slate-500">View the administrator, program head, faculty, and student accounts registered for portal access.</p>
+        <p class="mt-2 text-slate-500">View the administrator, program head, faculty, adviser, and student accounts registered for portal access.</p>
     </div>
     <a href="{{ route('admin.accounts.create') }}" class="rounded-xl bg-[#123A63] px-5 py-3 text-center font-semibold text-white hover:bg-[#245B8E]">+ Add Account</a>
 </div>
@@ -54,7 +54,7 @@
                                 <div><p class="font-semibold text-slate-900">{{ $account->name }}</p><p class="text-xs text-slate-500">{{ $account->email }}</p></div>
                             </div>
                         </td>
-                        <td class="account-col-role px-5 py-4"><span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{{ ucwords(str_replace('_', ' ', $account->role)) }}</span></td>
+                        <td class="account-col-role px-5 py-4"><div class="flex flex-wrap gap-1">@foreach($account->assignedRoles() as $role)<span class="rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{{ ucwords(str_replace('_', ' ', $role)) }}{{ $role === 'adviser' && $account->adviser_year_level ? ' · Year '.$account->adviser_year_level : '' }}</span>@endforeach</div></td>
                         <td class="account-col-access px-5 py-4"><span class="rounded-full px-3 py-1 text-xs font-bold {{ $account->is_active ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700' }}">{{ $account->is_active ? 'Can log in' : 'Disabled' }}</span></td>
                         <td class="account-col-registered px-5 py-4 text-slate-600">{{ $account->created_at->format('M d, Y') }}</td>
                         <td class="account-col-actions px-5 py-4">
