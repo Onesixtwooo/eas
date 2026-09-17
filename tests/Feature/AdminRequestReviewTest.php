@@ -77,7 +77,7 @@ class AdminRequestReviewTest extends TestCase
         $request->refresh();
         $this->assertSame('approved', $request->status);
         $this->assertSame($admin->id, $request->reviewed_by);
-        $this->assertSame('EAS-2026-CA-0001', $request->reference_number);
+        $this->assertMatchesRegularExpression('/^EAS-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/', $request->reference_number);
         $this->actingAs($admin)
             ->get(route('requests.show', $request))
             ->assertOk()

@@ -25,6 +25,10 @@ class ProfileController extends Controller
 
         $user->update($data);
 
+        if ($user->faculty) {
+            $user->faculty->update(['name' => $data['name']]);
+        }
+
         return back()->with('success', 'Your profile details have been updated.');
     }
 

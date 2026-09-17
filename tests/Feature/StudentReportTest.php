@@ -33,7 +33,7 @@ class StudentReportTest extends TestCase
             'assignment_id' => $assignment->id,
             'absent_student_ids' => [$assignedStudent->id],
             'comments' => [$assignedStudent->id => 'Reported absent during the morning class.'],
-        ])->assertRedirect(route('student-reports.index', ['assignment_id' => $assignment->id]));
+        ])->assertRedirect(route('student-reports.index'));
 
         $this->assertTrue(DailyAbsenceReport::query()
             ->where('instructor_assignment_id', $assignment->id)
@@ -44,6 +44,29 @@ class StudentReportTest extends TestCase
             'Reported absent during the morning class.',
             DailyAbsenceReport::firstOrFail()->comment
         );
+    }
+
+    public function test_instructor_can_select_active_class_tab(): void
+    {
+        [$facultyUser, $assignment] = $this->assignedClass();
+
+        $this->actingAs($facultyUser)
+            ->post(route('student-reports.select'), ['class_key' => $assignment->class_key])
+            ->assertRedirect(route('student-reports.index'));
+
+        $this->assertSame($assignment->id, session('active_student_report_assignment_id'));
+    }
+
+    public function test_instructor_cannot_select_another_instructors_assignment(): void
+    {
+        [, $assignment] = $this->assignedClass();
+        $otherFacultyUser = User::factory()->create(['role' => 'faculty', 'roles' => ['faculty'], 'is_active' => true]);
+        Faculty::create(['user_id' => $otherFacultyUser->id, 'name' => $otherFacultyUser->name]);
+
+        $this->actingAs($otherFacultyUser)
+            ->post(route('student-reports.select'), ['class_key' => $assignment->class_key])
+            ->assertRedirect()
+            ->assertSessionHas('error');
     }
 
     public function test_instructor_cannot_report_a_student_outside_the_assigned_class(): void
@@ -133,7 +156,7 @@ class StudentReportTest extends TestCase
         $this->assertSame($adviser->id, $report->adviser_action_by);
         $this->assertNotNull($report->adviser_action_at);
 
-        $this->actingAs($facultyUser)->get(route('student-reports.index', ['assignment_id' => $assignment->id]))
+        $this->actingAs($facultyUser)->get(route('student-reports.index'))
             ->assertOk()
             ->assertSee('Adviser action:')
             ->assertSee('Resolved')

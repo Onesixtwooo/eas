@@ -25,10 +25,16 @@ class StudentReportController extends Controller
             ->orderBy('subject_id')
             ->get();
 
-        $assignment = $request->filled('assignment_id')
-            ? $assignments->firstWhere('id', $request->integer('assignment_id'))
-            : $assignments->first();
-        abort_if($request->filled('assignment_id') && ! $assignment, 404);
+        if ($request->filled('assignment_id')) {
+            $requestedAssignment = $assignments->firstWhere('id', $request->integer('assignment_id'));
+            abort_if(! $requestedAssignment, 404);
+            $request->session()->put('active_student_report_assignment_id', $requestedAssignment->id);
+
+            return redirect()->route('student-reports.index');
+        }
+
+        $selectedId = (int) $request->session()->get('active_student_report_assignment_id');
+        $assignment = $assignments->firstWhere('id', $selectedId) ?: $assignments->first();
 
         $students = $assignment
             ? $this->studentsFor($assignment)->with(['user', 'course', 'section'])->orderBy('student_number')->get()
@@ -47,24 +53,56 @@ class StudentReportController extends Controller
         return view('faculty.student-reports.index', compact('assignments', 'assignment', 'students', 'reportedStudentIds', 'reportedComments', 'adviserComments', 'adviserActions'));
     }
 
+    public function select(Request $request)
+    {
+        $faculty = $request->user()->faculty;
+        abort_unless($faculty, 403, 'This faculty account is not linked to a faculty profile.');
+
+        $data = $request->validate([
+            'class_key' => ['required', 'string'],
+        ]);
+
+        $assignments = InstructorAssignment::query()
+            ->with(['course', 'subject', 'section'])
+            ->where('faculty_id', $faculty->id)
+            ->where('is_active', true)
+            ->get();
+
+        $assignment = $assignments->first(fn ($item) => $item->class_key === $data['class_key']);
+        abort_unless($assignment, 404);
+
+        $request->session()->put('active_student_report_assignment_id', $assignment->id);
+
+        return redirect()->route('student-reports.index');
+    }
+
     public function store(Request $request)
     {
         $faculty = $request->user()->faculty;
         abort_unless($faculty, 403, 'This faculty account is not linked to a faculty profile.');
 
         $data = $request->validate([
-            'assignment_id' => ['required', 'integer', 'exists:instructor_assignments,id'],
+            'class_key' => ['nullable', 'string'],
+            'assignment_id' => ['nullable', 'integer', 'exists:instructor_assignments,id'],
             'absent_student_ids' => ['nullable', 'array'],
             'absent_student_ids.*' => ['integer', 'distinct', 'exists:students,id'],
             'comments' => ['nullable', 'array'],
             'comments.*' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $assignment = InstructorAssignment::query()
-            ->whereKey($data['assignment_id'])
+        $assignments = InstructorAssignment::query()
+            ->with(['course', 'subject', 'section'])
             ->where('faculty_id', $faculty->id)
             ->where('is_active', true)
-            ->firstOrFail();
+            ->get();
+
+        $assignment = null;
+        if (filled($data['class_key'] ?? null)) {
+            $assignment = $assignments->first(fn ($item) => $item->class_key === $data['class_key']);
+        } elseif (filled($data['assignment_id'] ?? null)) {
+            $assignment = $assignments->firstWhere('id', (int) $data['assignment_id']);
+        }
+        abort_unless($assignment, 404);
         $eligibleStudentIds = $this->studentsFor($assignment)->pluck('id');
         $absentStudentIds = collect($data['absent_student_ids'] ?? [])->map(fn ($id) => (int) $id)->unique();
         abort_unless($absentStudentIds->diff($eligibleStudentIds)->isEmpty(), 403, 'One or more students are not assigned to this class.');
@@ -90,7 +128,9 @@ class StudentReportController extends Controller
             }
         });
 
-        return redirect()->route('student-reports.index', ['assignment_id' => $assignment->id])
+        $request->session()->put('active_student_report_assignment_id', $assignment->id);
+
+        return redirect()->route('student-reports.index')
             ->with('success', 'Today’s student absence report has been saved.');
     }
 

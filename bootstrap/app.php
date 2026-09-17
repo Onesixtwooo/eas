@@ -24,8 +24,22 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (NotFoundHttpException|ModelNotFoundException $exception, Request $request) {
-            if ($request->user()?->role === 'student' && ! $request->expectsJson()) {
-                return redirect()->route('requests.index')
+            if (! $request->expectsJson()) {
+                $hasReferer = $request->headers->has('referer');
+                $hasPreviousSession = $request->hasSession() && $request->session()->has('_previous.url');
+
+                $fallback = auth()->check()
+                    ? (auth()->user()->role === 'student' ? route('requests.index') : route('dashboard'))
+                    : route('login');
+
+                $previous = url()->previous();
+                $current = $request->fullUrl();
+
+                $destination = ($hasReferer || $hasPreviousSession) && ($previous && $previous !== $current && $previous !== url('/'))
+                    ? $previous
+                    : $fallback;
+
+                return redirect()->to($destination)
                     ->with('error', 'The page or request you were looking for could not be found.');
             }
         });

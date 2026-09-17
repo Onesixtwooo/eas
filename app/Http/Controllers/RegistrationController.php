@@ -70,15 +70,17 @@ class RegistrationController extends Controller
                     ->map(fn ($part) => trim($part))
                     ->implode(' ');
 
-                $user = User::create([
+                $user = (new User([
                     'name' => $name,
                     'email' => strtolower(trim($request->input('email'))),
                     'password' => $request->input('password'),
+                ]))->forceFill([
                     'role' => 'student',
                     'is_active' => true,
                     'registration_verified_at' => null,
                     'email_verified_at' => now(),
                 ]);
+                $user->save();
                 $student = Student::create([
                     'user_id' => $user->id,
                     'student_number' => trim($request->input('student_number')),

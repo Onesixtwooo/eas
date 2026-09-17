@@ -34,11 +34,11 @@ class StudentEmailVerificationController extends Controller
             return back()->withErrors(['otp' => 'The verification code is incorrect.']);
         }
 
-        $student->update([
+        $student->forceFill([
             'email_verified_at' => now(),
             'email_verification_otp' => null,
             'email_verification_otp_expires_at' => null,
-        ]);
+        ])->save();
         $request->session()->forget('email_verification_user_id');
 
         return redirect()->route('login')->with('success', 'Email verified. Please wait for an administrator to approve your registration before signing in.');
@@ -49,10 +49,10 @@ class StudentEmailVerificationController extends Controller
         $student = $this->studentFromSession($request);
         $otp = (string) random_int(100000, 999999);
 
-        $student->update([
+        $student->forceFill([
             'email_verification_otp' => Hash::make($otp),
             'email_verification_otp_expires_at' => now()->addMinutes(10),
-        ]);
+        ])->save();
         Mail::to($student->email)->send(new StudentEmailVerificationCode($student, $otp));
 
         return back()->with('success', 'A new verification code has been sent.');

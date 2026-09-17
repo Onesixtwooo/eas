@@ -73,10 +73,17 @@ class UserAccountController extends Controller
         $password = Str::random(12);
 
         DB::transaction(function () use ($data, $password) {
-            $administrator = User::create($data + [
+            $administrator = (new User([
+                'name' => $data['name'],
+                'email' => $data['email'],
                 'password' => $password,
+            ]))->forceFill([
+                'role' => $data['role'],
+                'roles' => $data['roles'],
+                'adviser_year_level' => $data['adviser_year_level'],
                 'is_active' => true,
             ]);
+            $administrator->save();
 
             if ($administrator->hasRole('faculty')) {
                 Faculty::create(['user_id' => $administrator->id, 'name' => $administrator->name, 'designation' => 'Course Facilitator']);
@@ -123,7 +130,19 @@ class UserAccountController extends Controller
         }
 
         DB::transaction(function () use ($account, $data, $roles) {
-            $account->update($data);
+            $account->fill([
+                'name' => $data['name'],
+                'email' => $data['email'],
+            ]);
+            if (isset($data['password'])) {
+                $account->password = $data['password'];
+            }
+            $account->forceFill([
+                'role' => $data['role'],
+                'roles' => $data['roles'],
+                'adviser_year_level' => $data['adviser_year_level'],
+                'is_active' => (bool) $data['is_active'],
+            ])->save();
             if (in_array('faculty', $roles, true)) {
                 $faculty = $account->faculty;
                 if (! $faculty && filled($data['faculty_id'] ?? null)) {

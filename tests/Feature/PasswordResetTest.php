@@ -30,4 +30,33 @@ class PasswordResetTest extends TestCase
 
         $this->assertTrue(Hash::check('new-secure-password', $user->fresh()->password));
     }
+
+    public function test_forgot_password_screen_can_be_rendered(): void
+    {
+        $this->get(route('password.request'))
+            ->assertOk()
+            ->assertSee('Reset your password');
+    }
+
+    public function test_password_reset_request_returns_generic_message_regardless_of_account_existence(): void
+    {
+        $user = User::factory()->create(['email' => 'registered.student@olshco.edu.ph', 'is_active' => true]);
+
+        $existingResponse = $this->from(route('password.request'))->post(route('password.email'), [
+            'email' => $user->email,
+        ]);
+
+        $existingResponse->assertRedirect(route('password.request'));
+        $existingResponse->assertSessionHas('success', 'If an account matches that email address, a password reset link has been sent.');
+        $existingResponse->assertSessionMissing('error');
+
+        $nonExistentResponse = $this->from(route('password.request'))->post(route('password.email'), [
+            'email' => 'unknown.ghost@olshco.edu.ph',
+        ]);
+
+        $nonExistentResponse->assertRedirect(route('password.request'));
+        $nonExistentResponse->assertSessionHas('success', 'If an account matches that email address, a password reset link has been sent.');
+        $nonExistentResponse->assertSessionMissing('error');
+    }
 }
+

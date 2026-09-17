@@ -89,4 +89,26 @@ class StudentNavigationTest extends TestCase
 
         $this->assertTrue(Hash::check('new-password', $student->fresh()->password));
     }
+
+    public function test_faculty_user_profile_update_syncs_faculty_record_name(): void
+    {
+        $user = User::factory()->create(['role' => 'faculty', 'name' => 'Original Faculty', 'is_active' => true]);
+        $faculty = \App\Models\Faculty::create([
+            'user_id' => $user->id,
+            'name' => 'Original Faculty',
+            'designation' => 'Instructor',
+        ]);
+
+        $this->actingAs($user)
+            ->put(route('profile.update'), [
+                'name' => 'Renamed Faculty Prof',
+                'email' => $user->email,
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertSessionHas('success');
+
+        $this->assertSame('Renamed Faculty Prof', $user->fresh()->name);
+        $this->assertSame('Renamed Faculty Prof', $faculty->fresh()->name);
+    }
 }
+

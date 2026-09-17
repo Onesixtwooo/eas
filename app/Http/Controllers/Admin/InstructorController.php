@@ -82,18 +82,20 @@ class InstructorController extends Controller
                     }
                     $currentFaculty->delete();
                 }
-                $user->update(['roles' => array_values(array_unique([...$user->assignedRoles(), 'faculty']))]);
+                $user->forceFill(['roles' => array_values(array_unique([...$user->assignedRoles(), 'faculty']))])->save();
             } else {
                 $password = Str::random(12);
-                $user = User::create([
+                $user = (new User([
                     'name' => $faculty->name,
                     'email' => $data['email'],
                     'password' => $password,
+                ]))->forceFill([
                     'role' => 'faculty',
                     'roles' => ['faculty'],
                     'is_active' => true,
                     'email_verified_at' => now(),
                 ]);
+                $user->save();
             }
             $faculty->user()->associate($user);
             $faculty->save();
@@ -134,6 +136,10 @@ class InstructorController extends Controller
             'password' => $faculty->user_id ? ['nullable', 'string', 'min:8', 'confirmed'] : ['nullable'],
         ]);
 
+        if ($faculty->user?->is($request->user()) && ! (bool) $data['is_active']) {
+            return back()->withErrors(['is_active' => 'You cannot disable the account you are currently logged into.'])->withInput();
+        }
+
         DB::transaction(function () use ($faculty, $data) {
             $faculty->update([
                 'name' => trim($data['name']),
@@ -142,15 +148,16 @@ class InstructorController extends Controller
             ]);
 
             if ($faculty->user_id) {
-                $account = [
+                $faculty->user->fill([
                     'name' => trim($data['name']),
                     'email' => $data['email'],
-                    'is_active' => (bool) $data['is_active'],
-                ];
+                ]);
                 if (filled($data['password'] ?? null)) {
-                    $account['password'] = $data['password'];
+                    $faculty->user->password = $data['password'];
                 }
-                $faculty->user->update($account);
+                $faculty->user->forceFill([
+                    'is_active' => (bool) $data['is_active'],
+                ])->save();
             }
         });
 

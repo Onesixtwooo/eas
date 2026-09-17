@@ -35,14 +35,16 @@ class StudentController extends Controller
             ], ['is_active' => true]);
             $name = collect([$request->first_name, $request->middle_name, $request->last_name])
                 ->filter()->map(fn ($part) => trim($part))->implode(' ');
-            $user = User::create([
+            $user = (new User([
                 'name' => $name,
                 'email' => strtolower(trim($request->email)),
                 'password' => $request->password,
+            ]))->forceFill([
                 'role' => 'student',
                 'is_active' => true,
                 'registration_verified_at' => now(),
             ]);
+            $user->save();
             Student::create([
                 'user_id' => $user->id,
                 'student_number' => trim($request->student_number),
@@ -139,7 +141,7 @@ class StudentController extends Controller
 
     public function toggleStatus(Student $student)
     {
-        $student->user->update(['is_active' => ! $student->user->is_active]);
+        $student->user->forceFill(['is_active' => ! $student->user->is_active])->save();
 
         return back()->with(
             'success',
@@ -150,11 +152,11 @@ class StudentController extends Controller
     public function verify(Student $student)
     {
         if (! $student->user->registration_verified_at) {
-            $student->user->update([
+            $student->user->forceFill([
                 'registration_verified_at' => now(),
                 'registration_declined_at' => null,
                 'registration_decline_reason' => null,
-            ]);
+            ])->save();
         }
 
         return back()->with('success', 'Student registration verified. The student can now sign in.');
@@ -170,11 +172,11 @@ class StudentController extends Controller
             return back()->with('error', 'A verified registration cannot be declined.');
         }
 
-        $student->user->update([
+        $student->user->forceFill([
             'registration_declined_at' => now(),
             'registration_decline_reason' => trim($data['reason']),
             'is_active' => false,
-        ]);
+        ])->save();
 
         Mail::to($student->user->email)->send(new StudentRegistrationDeclined($student->user));
 

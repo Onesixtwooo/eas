@@ -126,6 +126,26 @@ class ExcuseRequestDeletionTest extends TestCase
             ->count());
     }
 
+    public function test_student_can_cancel_a_draft_or_returned_request(): void
+    {
+        [$request, $studentUser] = $this->makeRequest();
+        $request->update(['status' => 'draft']);
+
+        $this->actingAs($studentUser)->post(route('requests.cancel', $request))
+            ->assertRedirect(route('requests.index'))
+            ->assertSessionHas('success');
+
+        $this->assertSame('cancelled', $request->fresh()->status);
+
+        $request->update(['status' => 'returned']);
+
+        $this->actingAs($studentUser)->post(route('requests.cancel', $request))
+            ->assertRedirect(route('requests.index'))
+            ->assertSessionHas('success');
+
+        $this->assertSame('cancelled', $request->fresh()->status);
+    }
+
     public function test_student_can_edit_date_subject_and_attachment_on_a_returned_request(): void
     {
         Storage::fake('local');

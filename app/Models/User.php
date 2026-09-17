@@ -22,16 +22,6 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
-        'role',
-        'roles',
-        'adviser_year_level',
-        'is_active',
-        'email_verified_at',
-        'registration_verified_at',
-        'registration_declined_at',
-        'registration_decline_reason',
-        'email_verification_otp',
-        'email_verification_otp_expires_at',
     ];
 
     /**

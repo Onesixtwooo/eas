@@ -10,8 +10,8 @@ use Illuminate\Validation\ValidationException;
 class RequestWorkflowService
 {
     private array $flows = [
-        'draft' => ['submitted'],
-        'returned' => ['submitted'],
+        'draft' => ['submitted', 'cancelled'],
+        'returned' => ['submitted', 'cancelled'],
         'submitted' => ['under_review', 'cancelled'],
         'under_review' => ['approved', 'returned', 'rejected'],
         'rejected' => ['under_review', 'approved', 'returned'],
@@ -64,18 +64,17 @@ class RequestWorkflowService
 
     private function referenceNumber(ExcuseRequest $request): string
     {
-        $parts = collect(preg_split('/\s+/u', trim($request->student->user->name)))
-            ->filter()
-            ->values();
-        $firstInitial = Str::upper(Str::substr($parts->first() ?? 'X', 0, 1));
-        $surnameInitial = Str::upper(Str::substr($parts->last() ?? 'X', 0, 1));
+        $year = now()->format('Y');
 
-        return sprintf(
-            'EAS-%s-%s%s-%04d',
-            now()->format('Y'),
-            $surnameInitial,
-            $firstInitial,
-            $request->id,
-        );
+        do {
+            $candidate = sprintf(
+                'EAS-%s-%s-%s',
+                $year,
+                Str::upper(Str::random(4)),
+                Str::upper(Str::random(4)),
+            );
+        } while (ExcuseRequest::where('reference_number', $candidate)->exists());
+
+        return $candidate;
     }
 }

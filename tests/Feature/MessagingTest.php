@@ -165,6 +165,21 @@ class MessagingTest extends TestCase
         $this->actingAs($faculty)->get(route('messages.index'))->assertForbidden();
     }
 
+    public function test_chat_messages_are_throttled_to_prevent_flooding(): void
+    {
+        $student = $this->createStudent('flooder@example.com', '2026-1099');
+
+        for ($i = 1; $i <= 30; $i++) {
+            $this->actingAs($student->user)
+                ->postJson(route('messages.store', $student), ['body' => "Message {$i}"])
+                ->assertCreated();
+        }
+
+        $this->actingAs($student->user)
+            ->postJson(route('messages.store', $student), ['body' => 'Message 31 exceeds flood limit'])
+            ->assertStatus(429);
+    }
+
     private function createStudent(string $email, string $number): Student
     {
         $course = Course::firstOrCreate(['code' => 'BSIT'], ['name' => 'BS Information Technology']);

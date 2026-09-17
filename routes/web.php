@@ -24,28 +24,28 @@ use Illuminate\Support\Facades\Route;
 Route::get('/', fn () => auth()->check() ? redirect()->route('dashboard') : view('auth.login'));
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'login'])->name('login');
-    Route::post('/login', [AuthController::class, 'authenticate'])->name('login.attempt');
+    Route::post('/login', [AuthController::class, 'authenticate'])->middleware('throttle:5,1')->name('login.attempt');
     Route::get('/register', [RegistrationController::class, 'create'])->name('register');
-    Route::post('/register', [RegistrationController::class, 'store'])->name('register.store');
+    Route::post('/register', [RegistrationController::class, 'store'])->middleware('throttle:10,1')->name('register.store');
     Route::post('/register/send-otp', [RegistrationController::class, 'sendOtp'])->middleware('throttle:2,1')->name('register.send-otp');
     Route::get('/register/verify-email', [StudentEmailVerificationController::class, 'show'])->name('register.verify-email');
     Route::post('/register/verify-email', [StudentEmailVerificationController::class, 'verify'])->middleware('throttle:10,1')->name('register.verify-email.store');
     Route::post('/register/verify-email/resend', [StudentEmailVerificationController::class, 'resend'])->middleware('throttle:2,1')->name('register.verify-email.resend');
     Route::get('/forgot-password', [AuthController::class, 'forgot'])->name('password.request');
-    Route::post('/forgot-password', [AuthController::class, 'emailReset'])->name('password.email');
+    Route::post('/forgot-password', [AuthController::class, 'emailReset'])->middleware('throttle:5,1')->name('password.email');
     Route::get('/reset-password/{token}', [AuthController::class, 'reset'])->name('password.reset');
-    Route::post('/reset-password', [AuthController::class, 'updatePassword'])->name('password.update');
+    Route::post('/reset-password', [AuthController::class, 'updatePassword'])->middleware('throttle:5,1')->name('password.update');
 });
-Route::get('/verify/{reference}', [VerificationController::class, 'show'])->name('verify');
+Route::get('/verify/{reference}', [VerificationController::class, 'show'])->middleware('throttle:10,1')->name('verify');
 Route::middleware('auth')->group(function () {
     Route::get('/realtime/version', [RealtimeController::class, 'version'])->middleware('throttle:30,1')->name('realtime.version');
     Route::get('/realtime/presence', [RealtimeController::class, 'presence'])->middleware('throttle:30,1')->name('realtime.presence');
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
     Route::get('/messages/archived', [MessageController::class, 'index'])->name('messages.archived');
     Route::post('/messages/select/{student}', [MessageController::class, 'select'])->name('messages.select');
-    Route::post('/messages/{student}', [MessageController::class, 'store'])->name('messages.store');
-    Route::put('/messages/item/{message}', [MessageController::class, 'update'])->name('messages.update');
-    Route::delete('/messages/item/{message}', [MessageController::class, 'destroy'])->name('messages.destroy');
+    Route::post('/messages/{student}', [MessageController::class, 'store'])->middleware('throttle:30,1')->name('messages.store');
+    Route::put('/messages/item/{message}', [MessageController::class, 'update'])->middleware('throttle:30,1')->name('messages.update');
+    Route::delete('/messages/item/{message}', [MessageController::class, 'destroy'])->middleware('throttle:30,1')->name('messages.destroy');
     Route::patch('/messages/conversation/{student}/archive', [MessageController::class, 'archive'])->name('messages.archive');
     Route::delete('/messages/conversation/{student}', [MessageController::class, 'deleteConversation'])->name('messages.conversation.destroy');
     Route::get('/messages/{student}/updates', [MessageController::class, 'updates'])->middleware('throttle:60,1')->name('messages.updates');
@@ -57,6 +57,7 @@ Route::middleware('auth')->group(function () {
     Route::patch('/advisory/absences/{report}/action', [AdvisoryController::class, 'action'])->middleware('role:adviser')->name('advisory.absences.action');
     Route::middleware('role:faculty')->group(function () {
         Route::get('/student-reports', [StudentReportController::class, 'index'])->name('student-reports.index');
+        Route::post('/student-reports/select', [StudentReportController::class, 'select'])->name('student-reports.select');
         Route::post('/student-reports', [StudentReportController::class, 'store'])->name('student-reports.store');
     });
     Route::get('/access-mode', [AccessModeController::class, 'create'])->name('access-mode.create');
@@ -79,7 +80,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/requests/{excuseRequest}/review', [WorkflowController::class, 'review'])->middleware('role:admin,program_head')->name('requests.review');
     Route::get('/profile', [ProfileController::class, 'show'])->name('profile');
     Route::put('/profile', [ProfileController::class, 'updateDetails'])->name('profile.update');
-    Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->name('profile.password.update');
+    Route::put('/profile/password', [ProfileController::class, 'updatePassword'])->middleware('throttle:6,1')->name('profile.password.update');
     Route::middleware('role:admin,program_head')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/', fn () => redirect()->route('admin.students.index'))->name('index');
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');

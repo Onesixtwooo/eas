@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\VirusScanException;
 use App\Http\Requests\StoreExcuseRequest;
 use App\Models\AcademicYear;
 use App\Models\ExcuseRequest;
@@ -13,11 +14,14 @@ use App\Models\Student;
 use App\Models\SupportingDocument;
 use App\Models\SystemSetting;
 use App\Services\RequestWorkflowService;
+use App\Services\VirusScanner;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -25,11 +29,29 @@ class ExcuseRequestController extends Controller
 {
     private const FACULTY_VISIBLE_STATUSES = ['approved', 'acknowledged', 'completed'];
 
+    private function scanUploadedDocument(UploadedFile $file, string $attribute = 'document'): void
+    {
+        try {
+            app(VirusScanner::class)->scan($file->getRealPath());
+        } catch (VirusScanException $exception) {
+            Log::warning('Document antivirus scan rejected an upload.', [
+                'infected' => $exception->infected,
+                'error' => $exception->getMessage(),
+            ]);
+
+            throw ValidationException::withMessages([
+                $attribute => $exception->infected
+                    ? 'The supporting document was rejected because malware was detected.'
+                    : 'The supporting document could not be safely scanned. Please try again later.',
+            ]);
+        }
+    }
+
     private function permitted(ExcuseRequest $e): bool
     {
         $u = auth()->user();
 
-        return $u->role === 'admin' || $u->role === 'program_head' || ($u->role === 'student' && $e->student_id === $u->student->id) || ($u->role === 'faculty' && $u->faculty && in_array($e->status, self::FACULTY_VISIBLE_STATUSES, true) && ($e->facilitator_id === $u->faculty->id || $e->facilitators()->whereKey($u->faculty->id)->exists()));
+        return $u->role === 'admin' || $u->role === 'program_head' || ($u->role === 'student' && $u->student && $e->student_id === $u->student->id) || ($u->role === 'faculty' && $u->faculty && in_array($e->status, self::FACULTY_VISIBLE_STATUSES, true) && ($e->facilitator_id === $u->faculty->id || $e->facilitators()->whereKey($u->faculty->id)->exists()));
     }
 
     public function index(Request $r)
@@ -147,6 +169,7 @@ class ExcuseRequestController extends Controller
     public function create()
     {
         $student = auth()->user()->student;
+        abort_unless($student, 403, 'A valid student profile is required.');
         $assignments = $this->assignmentsFor($student);
 
         return view('requests.form', ['requestItem' => new ExcuseRequest, 'assignments' => $assignments, 'reasons' => ReasonCategory::where('is_active', true)->get()]);
@@ -158,6 +181,7 @@ class ExcuseRequestController extends Controller
         $subjectIds = collect($data['subject_ids'])->map(fn ($id) => (int) $id)->values();
         unset($data['subject_ids'],$data['document'],$data['declaration'],$data['intent']);
         $student = $r->user()->student;
+        abort_unless($student, 403, 'A valid student profile is required.');
         $assignments = $this->assignmentsFor($student)->whereIn('subject_id', $subjectIds)->keyBy('subject_id');
         if ($assignments->count() !== $subjectIds->count()) {
             return back()->withErrors(['subject_ids' => 'Every selected subject must be in your current enrollment and have an active instructor assignment.'])->withInput();
@@ -179,7 +203,14 @@ class ExcuseRequestController extends Controller
         });
         if ($r->hasFile('document')) {
             $f = $r->file('document');
-            $item->documents()->create(['path' => $f->store('supporting-documents'), 'original_name' => $f->getClientOriginalName(), 'mime_type' => $f->getMimeType(), 'size' => $f->getSize()]);
+            $this->scanUploadedDocument($f);
+            $item->documents()->create([
+                'disk' => 'local',
+                'path' => $f->store('supporting-documents', 'local'),
+                'original_name' => $f->getClientOriginalName(),
+                'mime_type' => $f->getMimeType(),
+                'size' => $f->getSize(),
+            ]);
         }if ($r->intent === 'submit') {
             $flow->transition($item, 'submitted');
         }
@@ -212,7 +243,13 @@ class ExcuseRequestController extends Controller
         abort_unless($this->permitted($document->excuseRequest), 403);
         abort_unless(Storage::disk($document->disk)->exists($document->path), 404);
 
-        return Storage::disk($document->disk)->response($document->path, $document->original_name, ['Content-Type' => $document->mime_type, 'Content-Security-Policy' => "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox", 'X-Content-Type-Options' => 'nosniff']);
+        $mimeType = Storage::disk($document->disk)->mimeType($document->path) ?: $document->mime_type;
+
+        return Storage::disk($document->disk)->response($document->path, $document->original_name, [
+            'Content-Type' => $mimeType,
+            'Content-Security-Policy' => "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox",
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
     }
 
     public function updateAttachment(Request $r, ExcuseRequest $excuseRequest)
@@ -222,6 +259,7 @@ class ExcuseRequestController extends Controller
         abort_unless(in_array($excuseRequest->status, ['draft', 'returned', 'submitted'], true), 403);
         $data = $r->validate(['document' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120']);
         $file = $data['document'];
+        $this->scanUploadedDocument($file);
         $path = $file->store('supporting-documents', 'local');
         if (! $path) {
             throw ValidationException::withMessages(['document' => 'The attachment could not be stored. Please try again.']);
@@ -253,6 +291,9 @@ class ExcuseRequestController extends Controller
             return back()->withErrors(['absence_date' => 'Another request already exists for one or more selected subjects on this date.'])->withInput();
         }$oldDocuments = $excuseRequest->documents()->get();
         $primary = $assignments->get($subjectIds->first());
+        if ($r->hasFile('document')) {
+            $this->scanUploadedDocument($r->file('document'));
+        }
         DB::transaction(function () use ($r, $excuseRequest, $data, $subjectIds, $assignments, $primary) {
             $excuseRequest->update(collect($data)->except(['document', 'subject_ids'])->all() + ['subject_id' => $primary->subject_id, 'facilitator_id' => $primary->faculty_id]);
             $excuseRequest->subjects()->sync($subjectIds->mapWithKeys(fn ($id) => [$id => ['facilitator_id' => $assignments->get($id)->faculty_id]])->all());
@@ -276,7 +317,8 @@ class ExcuseRequestController extends Controller
 
     public function submit(ExcuseRequest $excuseRequest, RequestWorkflowService $flow)
     {
-        abort_unless(auth()->user()->role === 'student' && $excuseRequest->student_id === auth()->user()->student->id, 403);
+        $student = auth()->user()->student;
+        abort_unless(auth()->user()->role === 'student' && $student && $excuseRequest->student_id === $student->id, 403);
         $flow->transition($excuseRequest, 'submitted');
 
         return back()->with('success', 'Request submitted for review.');
@@ -284,7 +326,8 @@ class ExcuseRequestController extends Controller
 
     public function cancel(ExcuseRequest $excuseRequest, RequestWorkflowService $flow)
     {
-        abort_unless($excuseRequest->student_id === auth()->user()->student->id, 403);
+        $student = auth()->user()->student;
+        abort_unless($student && $excuseRequest->student_id === $student->id, 403);
         $flow->transition($excuseRequest, 'cancelled', 'Cancelled by student.');
 
         return redirect()->route('requests.index')->with('success', 'Your request has been cancelled.');

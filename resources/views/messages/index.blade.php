@@ -126,7 +126,14 @@
         send.disabled = true;
         try {
             const response = await fetch(@json(route('messages.store', $selectedStudent)), {method: 'POST', headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': @json(csrf_token())}, body: JSON.stringify({body: body.value})});
-            if (response.ok) { renderMessage((await response.json()).message); body.value = ''; body.style.height = ''; thread.scrollTop = thread.scrollHeight; }
+            if (response.ok) {
+                renderMessage((await response.json()).message);
+                body.value = '';
+                body.style.height = '';
+                thread.scrollTop = thread.scrollHeight;
+            } else if (response.status === 429) {
+                alert('You are sending messages too quickly. Please wait a moment before trying again.');
+            }
         } finally { send.disabled = false; body.focus(); }
     });
     body.addEventListener('input', () => { body.style.height = ''; body.style.height = `${Math.min(body.scrollHeight, 128)}px`; });
@@ -141,10 +148,18 @@
             const replacement = prompt('Edit message:', current);
             if (replacement === null || !replacement.trim() || replacement === current) return;
             const response = await fetch(updateUrl.replace('__MESSAGE__', id), {method: 'PUT', headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': @json(csrf_token())}, body: JSON.stringify({body: replacement})});
-            if (response.ok) renderMessage((await response.json()).message);
+            if (response.ok) {
+                renderMessage((await response.json()).message);
+            } else if (response.status === 429) {
+                alert('Too many edit requests. Please wait a moment before trying again.');
+            }
         } else if (confirm('Unsend this message for everyone?')) {
             const response = await fetch(unsendUrl.replace('__MESSAGE__', id), {method: 'DELETE', headers: {'Accept': 'application/json', 'X-CSRF-TOKEN': @json(csrf_token())}});
-            if (response.ok) renderMessage((await response.json()).message);
+            if (response.ok) {
+                renderMessage((await response.json()).message);
+            } else if (response.status === 429) {
+                alert('Too many unsend requests. Please wait a moment before trying again.');
+            }
         }
     });
     thread.scrollTop = thread.scrollHeight;

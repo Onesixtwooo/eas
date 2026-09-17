@@ -15,13 +15,16 @@
         <div class="px-5 pt-4"><p class="text-xs font-bold uppercase tracking-widest text-slate-500">Assigned Classes</p></div>
         <nav class="student-report-tabs mt-2 flex gap-2 overflow-x-auto px-4" aria-label="Assigned classes">
             @foreach($assignments as $item)
-                <a href="{{ route('student-reports.index', ['assignment_id' => $item->id]) }}" aria-current="{{ $assignment?->id === $item->id ? 'page' : 'false' }}" class="whitespace-nowrap rounded-t-xl border-b-2 px-5 py-3 text-sm font-semibold transition {{ $assignment?->id === $item->id ? 'border-[#123A63] bg-blue-50 text-[#123A63]' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-[#123A63]' }}"><span class="block font-bold">{{ $item->subject->code }}</span><span class="mt-0.5 block text-xs font-normal">{{ $item->course->code }} · Year {{ $item->year_level }} · {{ $item->section ? 'Block '.$item->section->name : 'All Blocks' }}</span></a>
+                <form method="post" action="{{ route('student-reports.select') }}" class="inline-block shrink-0">@csrf
+                    <input type="hidden" name="class_key" value="{{ $item->class_key }}">
+                    <button type="submit" aria-current="{{ $assignment?->id === $item->id ? 'page' : 'false' }}" class="whitespace-nowrap rounded-t-xl border-b-2 px-5 py-3 text-left text-sm font-semibold transition {{ $assignment?->id === $item->id ? 'border-[#123A63] bg-blue-50 text-[#123A63]' : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-[#123A63]' }}"><span class="block font-bold">{{ $item->subject->code }}</span><span class="mt-0.5 block text-xs font-normal">{{ $item->course->code }} · Year {{ $item->year_level }} · {{ $item->section ? 'Block '.$item->section->name : 'All Blocks' }}</span></button>
+                </form>
             @endforeach
         </nav>
     </section>
 
     <form method="post" action="{{ route('student-reports.store') }}" class="mt-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">@csrf
-        <input type="hidden" name="assignment_id" value="{{ $assignment->id }}">
+        <input type="hidden" name="class_key" value="{{ $assignment->class_key }}">
         <div class="border-b border-slate-100 p-5"><h2 class="font-bold text-slate-900">Mark students absent today</h2><p class="mt-1 text-sm text-slate-500">Checked students will appear in their adviser’s daily absence report. Uncheck a student to remove today’s report.</p></div>
         <div class="divide-y divide-slate-100">
             @forelse($students as $student)
@@ -52,7 +55,7 @@
 <style>
     .student-report-tabs { scrollbar-width: none; scroll-snap-type: x proximity; }
     .student-report-tabs::-webkit-scrollbar { display: none; }
-    .student-report-tabs > a { flex: 0 0 auto; scroll-snap-align: start; }
+    .student-report-tabs > form, .student-report-tabs > a { flex: 0 0 auto; scroll-snap-align: start; }
     .student-report-row { display: grid; gap: .85rem; padding: 1rem 1.25rem; }
     .student-report-identity { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: .75rem; min-width: 0; }
     .student-report-checkbox { margin-top: .2rem; }
