@@ -64,15 +64,8 @@ class RequestWorkflowService
 
     private function referenceNumber(ExcuseRequest $request): string
     {
-        $year = now()->format('Y');
-
         do {
-            $candidate = sprintf(
-                'EAS-%s-%s-%s',
-                $year,
-                Str::upper(Str::random(4)),
-                Str::upper(Str::random(4)),
-            );
+            $candidate = (string) Str::uuid();
         } while (ExcuseRequest::where('reference_number', $candidate)->exists());
 
         return $candidate;

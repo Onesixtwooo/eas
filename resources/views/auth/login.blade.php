@@ -18,6 +18,7 @@
             <div class="mb-8 flex items-center gap-3 lg:hidden"><img src="{{ asset('images.jpg') }}" alt="OLSHCO logo" class="size-11 rounded-full object-cover"><b class="text-xl text-[#123A63]">OLSHCO EAS</b></div>
             <h2 class="text-3xl font-bold text-slate-900">Welcome back</h2><p class="mt-2 text-slate-500">Sign in to access your portal.</p>
             @if(session('success'))<div class="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">{{ session('success') }}</div>@endif
+            @if(session('error'))<div class="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">{{ session('error') }}</div>@endif
             <form method="post" action="{{ route('login.attempt') }}" class="mt-8 space-y-5">
                 @csrf
                 <div><label>Email address</label><input type="email" name="email" value="{{ old('email') }}" required autofocus placeholder="name@olshco.edu.ph">@error('email')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>

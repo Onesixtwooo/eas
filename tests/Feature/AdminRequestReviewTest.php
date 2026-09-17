@@ -13,6 +13,7 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AdminRequestReviewTest extends TestCase
@@ -77,7 +78,7 @@ class AdminRequestReviewTest extends TestCase
         $request->refresh();
         $this->assertSame('approved', $request->status);
         $this->assertSame($admin->id, $request->reviewed_by);
-        $this->assertMatchesRegularExpression('/^EAS-\d{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/', $request->reference_number);
+        $this->assertTrue(Str::isUuid($request->reference_number));
         $this->actingAs($admin)
             ->get(route('requests.show', $request))
             ->assertOk()

@@ -118,6 +118,7 @@ class ExcuseRequestController extends Controller
             if ($r->filled('search')) {
                 $search = trim($r->search);
                 $q->where(fn ($x) => $x->where('reference_number', 'like', '%'.$search.'%')
+                    ->orWhere('legacy_reference_number', 'like', '%'.$search.'%')
                     ->orWhereHas('subjects', fn ($y) => $y->where('code', 'like', '%'.$search.'%')->orWhere('name', 'like', '%'.$search.'%'))
                     ->orWhereHas('subject', fn ($y) => $y->where('code', 'like', '%'.$search.'%')->orWhere('name', 'like', '%'.$search.'%'))
                     ->orWhereHas('student', fn ($y) => $y->where('student_number', 'like', '%'.$search.'%')->orWhereHas('user', fn ($z) => $z->where('name', 'like', '%'.$search.'%'))));

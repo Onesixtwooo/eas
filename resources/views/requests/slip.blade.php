@@ -356,6 +356,10 @@
     .slip-verification span {
         margin-top: 2px;
         color: #475569;
+        word-break: break-all;
+        font-family: monospace;
+        font-size: 7.5px;
+        max-width: 140px;
     }
     @page {
         size: A4 portrait;
