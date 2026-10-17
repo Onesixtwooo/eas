@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{{ asset('css/app.css') }}?v={{ filemtime(public_path('css/app.css')) }}">
 </head>
 <body class="min-h-screen bg-[#F5F7FA]">
+@include('partials.page-loader')
 <main class="flex min-h-screen items-center justify-center p-5">
     <div class="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl">
         <h1 class="text-3xl font-bold text-slate-900">Verify your email</h1>

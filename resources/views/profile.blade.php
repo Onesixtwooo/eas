@@ -36,10 +36,10 @@
             <form method="post" action="{{ route('profile.update') }}" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
                 @csrf @method('PUT')
                 <h2 class="text-lg font-bold text-slate-900">Personal details</h2>
-                <p class="mt-1 text-sm text-slate-500">Update the name and email address used by your account.</p>
+                <p class="mt-1 text-sm text-slate-500">Update your name. Contact an administrator if your email address needs to change.</p>
                 <div class="mt-5 grid gap-5 sm:grid-cols-2">
                     <div><label for="name">Full name</label><input id="name" name="name" value="{{ old('name', $user->name) }}" required autocomplete="name">@error('name', 'details')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
-                    <div><label for="email">Email address</label><input id="email" type="email" name="email" value="{{ old('email', $user->email) }}" required autocomplete="email">@error('email', 'details')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
+                    <div><span class="mb-2 block text-sm font-medium text-slate-700">Email address</span><p class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-700">{{ $user->email }}</p></div>
                 </div>
                 <div class="mt-5 flex justify-end border-t pt-5"><button class="rounded-xl bg-[#123A63] px-5 py-3 font-semibold text-white hover:bg-[#0d2d4e]">Save Details</button></div>
             </form>

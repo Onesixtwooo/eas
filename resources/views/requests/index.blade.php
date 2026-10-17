@@ -9,6 +9,7 @@
     @if(auth()->user()->role === 'student')
         <a href="{{ route('requests.create') }}" class="rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white hover:bg-emerald-700">+ New request</a>
     @elseif(in_array(auth()->user()->role, ['admin', 'program_head']))
+        <a href="{{ route('admin.request-archives.index') }}" class="rounded-xl border border-slate-300 bg-white px-5 py-3 font-semibold text-[#123A63] shadow-sm hover:bg-slate-50">Request Archives</a>
         <button type="button" onclick="document.getElementById('slip-settings').showModal()" class="rounded-xl border border-slate-300 bg-white px-5 py-3 font-semibold text-[#123A63] shadow-sm hover:bg-slate-50">Settings</button>
     @endif
 </div>
@@ -86,6 +87,9 @@
     @if(auth()->user()->role === 'student')
         @include('requests._table', ['items' => $requests])
     @else
+        @if(request()->filled('student_id'))
+            <div class="border-b border-slate-200 px-5 py-3"><a href="{{ route('requests.index', request()->except(['student_id', 'request_page', 'page'])) }}" class="text-sm font-semibold text-[#245B8E]">&larr; All students</a></div>
+        @endif
         @include('requests._grouped', ['groups' => $studentGroups])
     @endif
 </div>

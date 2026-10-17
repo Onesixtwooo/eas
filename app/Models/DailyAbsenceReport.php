@@ -7,8 +7,22 @@ use Illuminate\Database\Eloquent\Model;
 class DailyAbsenceReport extends Model
 {
     protected $guarded = [];
+
+    protected static function booted(): void
+    {
+        static::creating(function (self $report) {
+            $student = $report->student()->with(['section', 'course'])->firstOrFail();
+            $report->reported_year_level ??= $student->year_level;
+            $report->reported_section_id ??= $student->section_id;
+            $report->reported_section_name ??= $student->section?->name;
+            $report->reported_course_code ??= $student->course?->code;
+        });
+    }
+
     protected $casts = [
         'report_date' => 'date',
+        'reported_year_level' => 'integer',
+        'reported_section_id' => 'integer',
         'adviser_commented_at' => 'datetime',
         'adviser_action_at' => 'datetime',
     ];

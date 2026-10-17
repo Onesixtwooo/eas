@@ -86,12 +86,14 @@
                     @csrf @method('PATCH')
                     <button class="mt-5 w-full rounded-xl bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-700">Verify Student Registration</button>
                 </form>
-                <form method="post" action="{{ route('admin.students.decline', $student) }}" onsubmit="return confirm('Decline this registration and email the student?')" class="mt-5 border-t border-amber-200 pt-5">
+                <form method="post" action="{{ route('admin.students.decline', $student) }}" onsubmit="return confirm('Decline this registration, delete the account, and archive its records?')" class="mt-5 border-t border-amber-200 pt-5">
                     @csrf @method('PATCH')
                     <label for="decline-reason">Reason for declining</label>
                     <textarea id="decline-reason" name="reason" rows="4" maxlength="2000" required placeholder="Explain what the student needs to correct...">{{ old('reason') }}</textarea>
                     @error('reason')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
-                    <button class="mt-3 w-full rounded-xl bg-red-600 px-4 py-3 font-semibold text-white hover:bg-red-700">Decline Registration & Send Email</button>
+                    <label class="mt-4 flex items-start gap-2 text-sm text-red-900"><input type="checkbox" name="confirm_delete" value="1" required @checked(old('confirm_delete'))> I confirm this registration should be declined and the account deleted. Its records will be archived.</label>
+                    @error('confirm_delete')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                    <button class="mt-3 w-full rounded-xl bg-red-600 px-4 py-3 font-semibold text-white hover:bg-red-700">Decline, Archive & Delete Account</button>
                 </form>
             </div>
         @elseif($student->user->registration_declined_at)
@@ -100,6 +102,10 @@
                 <p class="mt-2 text-sm text-red-700">The student was notified by email on {{ $student->user->registration_declined_at->format('M j, Y g:i A') }}.</p>
                 <p class="mt-3 text-sm font-semibold text-red-900">Reason</p>
                 <p class="mt-1 whitespace-pre-line text-sm text-red-800">{{ $student->user->registration_decline_reason }}</p>
+                <form method="post" action="{{ route('admin.students.destroy', $student) }}" onsubmit="return confirm('Delete this declined account and archive its records?')" class="mt-5">
+                    @csrf @method('DELETE')
+                    <button class="w-full rounded-xl bg-red-600 px-4 py-3 font-semibold text-white hover:bg-red-700">Archive & Delete Declined Account</button>
+                </form>
             </div>
         @endif
         <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -117,18 +123,22 @@
         <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <p class="text-sm text-slate-500">Total excuse requests</p><p class="mt-2 text-4xl font-bold text-[#123A63]">{{ $student->requests_count }}</p>
         </div>
+        @unless($student->user->registration_declined_at)
         <form method="post" action="{{ route('admin.students.status', $student) }}" onsubmit="return confirm('{{ $student->user->is_active ? 'Deactivate' : 'Activate' }} this student account?')" class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             @csrf @method('PATCH')
             <h2 class="font-bold text-slate-900">Account access</h2>
             <p class="mt-2 text-sm text-slate-500">{{ $student->user->is_active ? 'Deactivation prevents this student from accessing protected pages.' : 'Activation restores access to the student portal.' }}</p>
             <button class="mt-5 w-full rounded-xl px-4 py-3 font-semibold text-white {{ $student->user->is_active ? 'bg-[#B3262E]' : 'bg-emerald-600' }}">{{ $student->user->is_active ? 'Deactivate Account' : 'Activate Account' }}</button>
         </form>
-        <form method="post" action="{{ route('admin.students.destroy', $student) }}" onsubmit="return confirm('Permanently delete this student and all linked records? This cannot be undone.')" class="rounded-2xl border border-red-200 bg-red-50 p-6">
+        @endunless
+        @unless($student->user->registration_declined_at)
+        <form method="post" action="{{ route('admin.students.destroy', $student) }}" onsubmit="return confirm('Archive this account and its records, then remove the account?')" class="rounded-2xl border border-red-200 bg-red-50 p-6">
             @csrf @method('DELETE')
             <h2 class="font-bold text-red-900">Delete student</h2>
-            <p class="mt-2 text-sm text-red-700">This permanently removes the student account, requests, histories, and uploaded documents.</p>
-            <button class="mt-5 w-full rounded-xl bg-[#B3262E] px-4 py-3 font-semibold text-white hover:bg-red-800">Delete Student Permanently</button>
+            <p class="mt-2 text-sm text-red-700">The account and linked records will be archived before removal.</p>
+            <button class="mt-5 w-full rounded-xl bg-[#B3262E] px-4 py-3 font-semibold text-white hover:bg-red-800">Archive & Delete Student</button>
         </form>
+        @endunless
     </aside>
 </div>
 

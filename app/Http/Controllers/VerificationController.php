@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ExcuseRequest;
+use App\Models\ExcuseRequestArchive;
 
 class VerificationController extends Controller
 {
@@ -10,7 +11,7 @@ class VerificationController extends Controller
 
     public function show(string $reference)
     {
-        $item = ExcuseRequest::with(['student.user', 'subject', 'facilitator.user', 'subjects', 'facilitators.user'])
+        $item = ExcuseRequest::with(['student.user', 'subject', 'facilitator.user', 'subjects', 'facilitators.user', 'documents'])
             ->where(fn ($query) => $query
                 ->where('reference_number', $reference)
                 ->orWhere('legacy_reference_number', $reference))
@@ -18,6 +19,12 @@ class VerificationController extends Controller
             ->first();
 
         if (! $item) {
+            $archive = ExcuseRequestArchive::where(fn ($query) => $query
+                ->where('reference_number', $reference)
+                ->orWhere('legacy_reference_number', $reference))
+                ->whereIn('status', self::VERIFIABLE_STATUSES)->first();
+            if ($archive) return view('verify-archived', compact('archive', 'reference'));
+
             $fallback = auth()->check()
                 ? (auth()->user()->role === 'student' ? route('requests.index') : route('dashboard'))
                 : route('login');

@@ -19,7 +19,7 @@
             <div class="border-t pt-6">
                 <h2 class="font-bold text-[#123A63]">Portal Account</h2>
                 <div class="mt-5 grid gap-5 sm:grid-cols-2">
-                    <div><label for="email">Email address *</label><input id="email" type="email" name="email" value="{{ old('email', $faculty->user->email) }}" required>@error('email')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
+                    <div><label for="email">Email address *</label><input id="email" type="email" name="email" value="{{ $faculty->user->email }}" readonly required><p class="mt-1 text-xs text-slate-500">Account email addresses cannot be changed.</p>@error('email')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
                     <div><label for="is_active">Login status *</label><select id="is_active" name="is_active" required><option value="1" @selected((string) old('is_active', (int) $faculty->user->is_active) === '1')>Active</option><option value="0" @selected((string) old('is_active', (int) $faculty->user->is_active) === '0')>Disabled</option></select>@error('is_active')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
                     <div><label for="password">New password</label><input id="password" type="password" name="password" minlength="8" autocomplete="new-password"><p class="mt-1 text-xs text-slate-500">Leave blank to keep the current password.</p>@error('password')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
                     <div><label for="password_confirmation">Confirm new password</label><input id="password_confirmation" type="password" name="password_confirmation" minlength="8" autocomplete="new-password"></div>

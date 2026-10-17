@@ -9,6 +9,7 @@
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
 <body x-data="{ menu: false, menuTouchX: null }" @keydown.escape.window="menu = false" :class="{ 'overflow-hidden': menu }" class="min-h-screen">
+    @include('partials.page-loader')
     @php($isAccessModePage = request()->routeIs('access-mode.create'))
     <div id="realtime-update" class="no-print fixed bottom-5 right-5 z-50 hidden max-w-sm rounded-2xl border border-blue-200 bg-white p-4 shadow-2xl">
         <p class="font-semibold text-slate-900">New system updates are available.</p>
@@ -31,11 +32,10 @@
             @php($links = auth()->user()->role === 'student'
                 ? [['requests.index', 'My Requests', '=']]
                 : (auth()->user()->role === 'adviser'
-                    ? [['advisory.index', 'My Advisory', '@'], ['advisory.absences', 'Daily Absences', '=']]
+                    ? [['advisory.index', 'My Advisory', '@'], ['advisory.absences', 'Daily Attendance', '=']]
                     : [['dashboard', 'Dashboard', '*'], ['requests.index', 'Excuse Requests', '=']]))
             @if(auth()->user()->role === 'student') @php($links[] = ['requests.create', 'Submit Excuse Slip', '+']) @endif
-            @if(auth()->user()->role === 'faculty') @php($links[] = ['student-reports.index', 'Student Report', '@']) @endif
-            @if(in_array(auth()->user()->role, ['student', 'admin', 'program_head'])) @php($links[] = ['messages.index', 'Messages', '#']) @endif
+            @if(in_array(auth()->user()->role, ['student', 'admin', 'program_head', 'faculty'])) @php($links[] = ['messages.index', 'Messages', '#']) @endif
             @foreach($links as [$route, $label, $icon])
                 <a href="{{ route($route) }}" @click="menu = false" class="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium {{ request()->routeIs($route) || ($route === 'messages.index' && request()->routeIs('messages.*')) || ($route === 'admin.subjects.index' && request()->routeIs('admin.subjects.*')) ? 'bg-white text-[#123A63] shadow' : 'text-blue-100 hover:bg-white/10' }}">
                     <span class="w-5 text-center text-lg">{{ $icon }}</span>{{ $label }}

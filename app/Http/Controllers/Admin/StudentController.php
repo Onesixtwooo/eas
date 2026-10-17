@@ -9,10 +9,15 @@ use App\Models\Student;
 use App\Models\User;
 use App\Models\Course;
 use App\Mail\StudentRegistrationDeclined;
+use App\Mail\StudentEmailVerificationCode;
+use App\Services\AccountArchiveService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class StudentController extends Controller
 {
@@ -27,12 +32,18 @@ class StudentController extends Controller
     public function store(RegisterStudentRequest $request)
     {
         DB::transaction(function () use ($request) {
+            $otp = (string) random_int(100000, 999999);
             $course = Course::where('code', 'BSIT')->firstOrFail();
             $section = Section::firstOrCreate([
                 'course_id' => $course->id,
                 'year_level' => $request->integer('year_level'),
                 'name' => $request->input('block'),
             ], ['is_active' => true]);
+            if (! $section->is_active) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'block' => 'This section is no longer available. Choose an active section.',
+                ]);
+            }
             $name = collect([$request->first_name, $request->middle_name, $request->last_name])
                 ->filter()->map(fn ($part) => trim($part))->implode(' ');
             $user = (new User([
@@ -43,6 +54,8 @@ class StudentController extends Controller
                 'role' => 'student',
                 'is_active' => true,
                 'registration_verified_at' => now(),
+                'email_verification_otp' => Hash::make($otp),
+                'email_verification_otp_expires_at' => now()->addMinutes(10),
             ]);
             $user->save();
             Student::create([
@@ -53,9 +66,10 @@ class StudentController extends Controller
                 'section_id' => $section->id,
                 'year_level' => $section->year_level,
             ]);
+            Mail::to($user->email)->send(new StudentEmailVerificationCode($user, $otp));
         });
 
-        return redirect()->route('admin.students.index')->with('success', 'Student account created successfully.');
+        return redirect()->route('admin.students.index')->with('success', 'Student account created. An email verification code was sent to the student.');
     }
 
     public function index(Request $request)
@@ -141,6 +155,10 @@ class StudentController extends Controller
 
     public function toggleStatus(Student $student)
     {
+        if ($student->user->registration_declined_at) {
+            return back()->with('error', 'A declined registration cannot be activated. Archive the account.');
+        }
+
         $student->user->forceFill(['is_active' => ! $student->user->is_active])->save();
 
         return back()->with(
@@ -151,36 +169,65 @@ class StudentController extends Controller
 
     public function verify(Student $student)
     {
-        if (! $student->user->registration_verified_at) {
-            $student->user->forceFill([
-                'registration_verified_at' => now(),
-                'registration_declined_at' => null,
-                'registration_decline_reason' => null,
-            ])->save();
+        User::whereKey($student->user_id)
+            ->whereNull('registration_verified_at')
+            ->whereNull('registration_declined_at')
+            ->update(['registration_verified_at' => now()]);
+        $student->user->refresh();
+
+        if ($student->user->registration_declined_at) {
+            return back()->with('error', 'A declined registration cannot be verified. Archive the account if it still exists.');
         }
 
-        return back()->with('success', 'Student registration verified. The student can now sign in.');
+        $message = ! $student->user->is_active
+            ? 'Student registration verified. The account remains inactive until activated.'
+            : ($student->user->email_verified_at
+                ? 'Student registration verified. The student can now sign in.'
+                : 'Student registration verified. The student can sign in after verifying their email address.');
+
+        return back()->with('success', $message);
     }
 
-    public function decline(Request $request, Student $student)
+    public function decline(Request $request, Student $student, AccountArchiveService $archives)
     {
         $data = $request->validate([
             'reason' => ['required', 'string', 'max:2000'],
+            'confirm_delete' => ['required', 'accepted'],
         ]);
 
-        if ($student->user->registration_verified_at) {
-            return back()->with('error', 'A verified registration cannot be declined.');
+        $updated = User::whereKey($student->user_id)
+            ->whereNull('registration_verified_at')
+            ->whereNull('registration_declined_at')
+            ->update([
+                'registration_declined_at' => now(),
+                'registration_decline_reason' => trim($data['reason']),
+                'is_active' => false,
+            ]);
+        if (! $updated) {
+            return back()->with('error', 'Only pending registrations can be declined.');
+        }
+        $student->user->refresh();
+
+        $recipient = $student->user->email;
+        $notice = new StudentRegistrationDeclined($student->user);
+        $archive = $archives->archiveAndRemove($student->user, $request->user());
+
+        try {
+            Mail::to($recipient)->send($notice);
+        } catch (Throwable $error) {
+            Log::error('Declined registration notification could not be sent.', [
+                'archive_id' => $archive->archive_id,
+                'error' => $error->getMessage(),
+            ]);
+
+            return redirect()->route('admin.students.index')->with('error',
+                'Registration declined and archived, but the notification email could not be sent.');
         }
 
-        $student->user->forceFill([
-            'registration_declined_at' => now(),
-            'registration_decline_reason' => trim($data['reason']),
-            'is_active' => false,
-        ])->save();
-
-        Mail::to($student->user->email)->send(new StudentRegistrationDeclined($student->user));
-
-        return back()->with('success', 'Student registration declined. A notification email was sent to the student.');
+        return redirect()->route('admin.students.index')->with('success',
+            $archive->outcome === 'deleted'
+                ? 'Registration declined. The account was deleted, its records archived, and the student notified.'
+                : 'Registration declined. The account was disabled, its records archived, and the student notified.');
     }
 
     public function assessmentForm(Student $student)
@@ -197,15 +244,17 @@ class StudentController extends Controller
         );
     }
 
-    public function destroy(Student $student)
+    public function destroy(Student $student, AccountArchiveService $archives)
     {
-        $this->deleteStudents(collect([$student]));
+        $archive = $archives->archiveAndRemove($student->user, auth()->user());
 
         return redirect()->route('admin.students.index')
-            ->with('success', 'Student and linked account deleted permanently.');
+            ->with('success', $archive->outcome === 'deleted'
+                ? 'Student account deleted and its records archived.'
+                : 'Student account archived and disabled; linked records remain active.');
     }
 
-    public function bulkDestroy(Request $request)
+    public function bulkDestroy(Request $request, AccountArchiveService $archives)
     {
         $data = $request->validate([
             'student_ids' => ['required', 'array', 'min:1'],
@@ -214,35 +263,35 @@ class StudentController extends Controller
             'student_ids.required' => 'Select at least one student to delete.',
         ]);
 
-        $students = Student::with('requests.documents')
+        $students = Student::with('user')
             ->whereIn('id', $data['student_ids'])
             ->get();
 
         $count = $students->count();
-        $this->deleteStudents($students);
+        $outcomes = $archives->archiveManyAndRemove($students->pluck('user'), $request->user())->pluck('outcome');
 
         return redirect()->route('admin.students.index')
-            ->with('success', "{$count} student account(s) deleted permanently.");
+            ->with('success', "{$count} student account(s) archived: {$outcomes->filter(fn ($outcome) => $outcome === 'deleted')->count()} deleted, {$outcomes->filter(fn ($outcome) => $outcome === 'deactivated')->count()} disabled.");
     }
 
-    private function deleteStudents($students): void
+    public function bulkDeactivate(Request $request)
     {
-        DB::transaction(function () use ($students) {
-            foreach ($students as $student) {
-                $student->loadMissing('requests.documents');
+        $data = $request->validate([
+            'student_ids' => ['required', 'array', 'min:1'],
+            'student_ids.*' => ['integer', 'distinct', 'exists:students,id'],
+        ], [
+            'student_ids.required' => 'Select at least one student to deactivate.',
+        ]);
 
-                if ($student->assessment_form_path) {
-                    Storage::disk('local')->delete($student->assessment_form_path);
-                }
+        $userIds = Student::whereIn('id', $data['student_ids'])->select('user_id');
+        $count = User::whereIn('id', $userIds)
+            ->where('is_active', true)
+            ->update(['is_active' => false]);
 
-                foreach ($student->requests as $excuseRequest) {
-                    foreach ($excuseRequest->documents as $document) {
-                        Storage::disk($document->disk)->delete($document->path);
-                    }
-                }
-
-                $student->user()->delete();
-            }
-        });
+        return redirect()->route('admin.students.index')
+            ->with('success', $count === 0
+                ? 'Selected student accounts are already inactive.'
+                : "{$count} student account(s) deactivated.");
     }
+
 }

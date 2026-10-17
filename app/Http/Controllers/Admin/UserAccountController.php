@@ -6,7 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Mail\AdministratorAccountCreated;
 use App\Models\User;
 use App\Models\Faculty;
-use Illuminate\Database\QueryException;
+use App\Services\AccountArchiveService;
+use App\Services\InvalidateUserSessions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -97,14 +98,14 @@ class UserAccountController extends Controller
         return redirect()->route('admin.accounts.index')->with('success', 'Account created and login details emailed.');
     }
 
-    public function update(Request $request, User $account)
+    public function update(Request $request, User $account, InvalidateUserSessions $invalidateSessions)
     {
         if (! $request->has('roles') && $request->filled('role')) {
             $request->merge(['roles' => [$request->input('role')]]);
         }
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('users')->ignore($account)],
+            'email' => ['required', 'email', 'max:255'],
             'roles' => ['required', 'array', 'min:1'],
             'roles.*' => ['required', 'distinct', Rule::in(['admin', 'program_head', 'faculty', 'adviser', 'student'])],
             'adviser_year_level' => [Rule::requiredIf(fn () => in_array('adviser', $request->input('roles', []), true)), 'nullable', 'integer', 'between:1,5'],
@@ -114,8 +115,15 @@ class UserAccountController extends Controller
         ]);
 
         $roles = array_values($data['roles']);
-        if (in_array('student', $roles, true) && count($roles) > 1) {
-            return back()->withErrors(['roles' => 'Student access cannot be combined with another role.'])->withInput();
+        $isStudentAccount = $account->hasRole('student') || $account->student()->exists();
+        if ($isStudentAccount && ($roles !== ['student'])) {
+            return back()->withErrors(['roles' => 'A student account must remain a student account.'])->withInput();
+        }
+        if (! $isStudentAccount && in_array('student', $roles, true)) {
+            return back()->withErrors(['roles' => 'A staff account cannot be changed to a student account.'])->withInput();
+        }
+        if ($data['email'] !== $account->email) {
+            return back()->withErrors(['email' => 'An account email address cannot be changed.'])->withInput();
         }
         $data['role'] = $roles[0];
         $data['roles'] = $roles;
@@ -129,13 +137,13 @@ class UserAccountController extends Controller
             unset($data['password']);
         }
 
-        DB::transaction(function () use ($account, $data, $roles) {
+        DB::transaction(function () use ($account, $data, $roles, $request, $invalidateSessions) {
             $account->fill([
                 'name' => $data['name'],
-                'email' => $data['email'],
             ]);
             if (isset($data['password'])) {
                 $account->password = $data['password'];
+                $account->remember_token = Str::random(60);
             }
             $account->forceFill([
                 'role' => $data['role'],
@@ -143,6 +151,9 @@ class UserAccountController extends Controller
                 'adviser_year_level' => $data['adviser_year_level'],
                 'is_active' => (bool) $data['is_active'],
             ])->save();
+            if (isset($data['password'])) {
+                $invalidateSessions($account, $account->is($request->user()) ? $request->session()->getId() : null);
+            }
             if (in_array('faculty', $roles, true)) {
                 $faculty = $account->faculty;
                 if (! $faculty && filled($data['faculty_id'] ?? null)) {
@@ -160,18 +171,16 @@ class UserAccountController extends Controller
         return redirect()->route('admin.accounts.index')->with('success', 'User account updated.');
     }
 
-    public function destroy(Request $request, User $account)
+    public function destroy(Request $request, User $account, AccountArchiveService $archives)
     {
         if ($account->is($request->user())) {
             return back()->with('error', 'You cannot delete the account you are currently using.');
         }
 
-        try {
-            $account->delete();
-        } catch (QueryException) {
-            return back()->with('error', 'This account is linked to records that must be retained. Disable it instead.');
-        }
+        $archive = $archives->archiveAndRemove($account, $request->user());
 
-        return redirect()->route('admin.accounts.index')->with('success', 'User account deleted.');
+        return redirect()->route('admin.accounts.index')->with('success', $archive->outcome === 'deleted'
+            ? 'Account deleted. Its records and files are available in Account Archives.'
+            : 'Account archived and disabled. Linked live records were retained.');
     }
 }

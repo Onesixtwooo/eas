@@ -85,12 +85,12 @@ class AdminUserAccountTest extends TestCase
     public function test_admin_can_edit_an_account(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
-        $account = User::factory()->create(['role' => 'faculty', 'is_active' => true]);
+        $account = User::factory()->create(['role' => 'faculty', 'email' => 'faculty@example.com', 'is_active' => true]);
 
         $this->actingAs($admin)
             ->put(route('admin.accounts.update', $account), [
                 'name' => 'Updated Faculty',
-                'email' => 'updated@example.com',
+                'email' => $account->email,
                 'role' => 'faculty',
                 'is_active' => '0',
                 'password' => '',
@@ -100,8 +100,90 @@ class AdminUserAccountTest extends TestCase
 
         $account->refresh();
         $this->assertSame('Updated Faculty', $account->name);
-        $this->assertSame('updated@example.com', $account->email);
+        $this->assertSame('faculty@example.com', $account->email);
         $this->assertFalse($account->is_active);
+    }
+
+    public function test_staff_account_cannot_be_changed_to_student(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $staff = User::factory()->create(['role' => 'faculty', 'is_active' => true]);
+
+        $this->actingAs($admin)->put(route('admin.accounts.update', $staff), [
+            'name' => $staff->name,
+            'email' => $staff->email,
+            'roles' => ['student'],
+            'is_active' => '1',
+        ])->assertSessionHasErrors('roles');
+
+        $this->assertSame('faculty', $staff->fresh()->role);
+        $this->actingAs($admin)->get(route('admin.accounts.edit', $staff))
+            ->assertOk()->assertDontSee('value="student"', false);
+    }
+
+    public function test_student_account_cannot_be_changed_to_staff_or_given_a_staff_role(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $student = User::factory()->create(['role' => 'student', 'is_active' => true]);
+
+        foreach ([['faculty'], ['student', 'adviser']] as $roles) {
+            $this->actingAs($admin)->put(route('admin.accounts.update', $student), [
+                'name' => $student->name,
+                'email' => $student->email,
+                'roles' => $roles,
+                'adviser_year_level' => 1,
+                'is_active' => '1',
+            ])->assertSessionHasErrors('roles');
+        }
+
+        $this->assertSame('student', $student->fresh()->role);
+        $this->actingAs($admin)->get(route('admin.accounts.edit', $student))
+            ->assertOk()->assertDontSee('value="faculty"', false)
+            ->assertSee('readonly', false);
+    }
+
+    public function test_admin_cannot_change_student_email_but_can_update_other_account_details(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $student = User::factory()->create([
+            'role' => 'student', 'is_active' => true,
+            'email' => 'verified@example.com', 'email_verified_at' => now(),
+        ]);
+
+        $this->actingAs($admin)->put(route('admin.accounts.update', $student), [
+            'name' => 'Changed Name',
+            'email' => 'replacement@example.com',
+            'roles' => ['student'],
+            'is_active' => '1',
+        ])->assertSessionHasErrors('email');
+
+        $this->assertSame('verified@example.com', $student->fresh()->email);
+        $this->actingAs($admin)->put(route('admin.accounts.update', $student), [
+            'name' => 'Changed Name',
+            'email' => 'verified@example.com',
+            'roles' => ['student'],
+            'is_active' => '0',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertSame('Changed Name', $student->fresh()->name);
+        $this->assertFalse($student->fresh()->is_active);
+    }
+
+    public function test_admin_cannot_change_staff_email_through_account_edit(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $staff = User::factory()->create(['role' => 'faculty', 'email' => 'original@example.com', 'is_active' => true]);
+
+        $this->actingAs($admin)->put(route('admin.accounts.update', $staff), [
+            'name' => $staff->name,
+            'email' => 'replacement@example.com',
+            'roles' => ['faculty'],
+            'is_active' => '1',
+        ])->assertSessionHasErrors('email');
+
+        $this->assertSame('original@example.com', $staff->fresh()->email);
+        $this->actingAs($admin)->get(route('admin.accounts.edit', $staff))
+            ->assertOk()->assertSee('readonly', false);
     }
 
     public function test_admin_can_create_another_administrator(): void

@@ -2,9 +2,11 @@
 
 namespace Tests\Feature;
 
+use App\Exceptions\VirusScanException;
 use App\Models\AcademicYear;
 use App\Models\Course;
 use App\Models\ExcuseRequest;
+use App\Models\ExcuseRequestArchive;
 use App\Models\Faculty;
 use App\Models\InstructorAssignment;
 use App\Models\ReasonCategory;
@@ -14,6 +16,7 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Models\SupportingDocument;
 use App\Models\User;
+use App\Services\VirusScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -50,6 +53,32 @@ class ExcuseRequestDeletionTest extends TestCase
         $this->assertDatabaseMissing('excuse_requests', ['id' => $request->id]);
         $this->assertDatabaseMissing('supporting_documents', ['excuse_request_id' => $request->id]);
         Storage::disk('local')->assertMissing('supporting-documents/proof.pdf');
+        $archive = ExcuseRequestArchive::where('original_request_id', $request->id)->firstOrFail();
+        $this->assertSame($request->id, $archive->records['request']['id']);
+        $this->assertCount(1, $archive->records['supporting_documents']);
+        Storage::disk('local')->assertExists($archive->files[0]['archive_path']);
+        $this->actingAs($admin)->get(route('admin.request-archives.index'))->assertOk()->assertSee('Request Archives');
+        $this->actingAs($admin)->get(route('admin.request-archives.export', $archive))
+            ->assertOk()->assertJsonPath('records.request.id', $request->id);
+        $this->actingAs($admin)->get(route('admin.request-archives.file', [$archive, 0]))
+            ->assertOk()->assertDownload('proof.pdf');
+    }
+
+    public function test_archived_approved_request_remains_publicly_verifiable_without_exposing_attachments(): void
+    {
+        Storage::fake('local');
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        [$request] = $this->makeRequest();
+        $request->update(['status' => 'approved', 'reference_number' => 'ARCHIVED-SLIP-123']);
+        Storage::disk('local')->put('supporting-documents/private.pdf', 'private evidence');
+        $request->documents()->create(['disk' => 'local', 'path' => 'supporting-documents/private.pdf',
+            'original_name' => 'private.pdf', 'mime_type' => 'application/pdf', 'size' => 16]);
+
+        $this->actingAs($admin)->delete(route('requests.destroy', $request))->assertRedirect();
+        auth()->logout();
+        $this->get(route('verify', 'ARCHIVED-SLIP-123'))->assertOk()
+            ->assertSee('VALID OFFICIAL SLIP')->assertSee('ARCHIVED-SLIP-123')
+            ->assertDontSee('private.pdf')->assertDontSee('private evidence');
     }
 
     public function test_student_cannot_delete_a_request(): void
@@ -91,6 +120,38 @@ class ExcuseRequestDeletionTest extends TestCase
             ->where('subject_id', $request->subject_id)
             ->whereDate('absence_date', $request->absence_date)
             ->count());
+    }
+
+    public function test_failed_document_scan_does_not_leave_a_draft_and_student_can_retry(): void
+    {
+        Storage::fake('local');
+        [$existing, $studentUser] = $this->makeRequest();
+        $existing->update(['status' => 'cancelled']);
+        $this->mock(VirusScanner::class)
+            ->shouldReceive('scan')
+            ->once()
+            ->andThrow(new VirusScanException('Scanner unavailable.'));
+
+        $input = [
+            'absence_date' => now()->toDateString(),
+            'subject_id' => $existing->subject_id,
+            'reason_category_id' => $existing->reason_category_id,
+            'explanation' => 'This request should be retried after the scanner is available.',
+            'start_time' => '08:00',
+            'end_time' => '09:00',
+            'declaration' => '1',
+            'intent' => 'submit',
+        ];
+        $this->actingAs($studentUser)->post(route('requests.store'), $input + [
+            'document' => UploadedFile::fake()->create('proof.pdf', 100, 'application/pdf'),
+        ])->assertSessionHasErrors('document');
+
+        $this->assertSame(1, ExcuseRequest::where('student_id', $existing->student_id)->count());
+        $this->assertDatabaseCount('supporting_documents', 0);
+
+        $this->post(route('requests.store'), $input)
+            ->assertRedirect()->assertSessionHas('success');
+        $this->assertSame(2, ExcuseRequest::where('student_id', $existing->student_id)->count());
     }
 
     public function test_student_can_cancel_a_submitted_request_and_create_a_replacement(): void
@@ -146,11 +207,13 @@ class ExcuseRequestDeletionTest extends TestCase
         $this->assertSame('cancelled', $request->fresh()->status);
     }
 
-    public function test_student_can_edit_date_subject_and_attachment_on_a_returned_request(): void
+    public function test_student_can_edit_details_but_not_attachment_on_a_returned_request(): void
     {
         Storage::fake('local');
         [$request, $studentUser] = $this->makeRequest();
         $request->update(['status' => 'returned']);
+        Storage::disk('local')->put('supporting-documents/original.pdf', 'original');
+        $original = $request->documents()->create(['disk' => 'local', 'path' => 'supporting-documents/original.pdf', 'original_name' => 'original.pdf', 'mime_type' => 'application/pdf', 'size' => 8]);
         $student = Student::findOrFail($request->student_id);
         $newSubject = Subject::create(['code' => 'EDIT102', 'name' => 'Updated Subject', 'course_id' => $student->course_id, 'year_level' => 1]);
         InstructorAssignment::create(['faculty_id' => $request->facilitator_id, 'course_id' => $student->course_id, 'subject_id' => $newSubject->id, 'year_level' => 1, 'is_active' => true]);
@@ -168,7 +231,6 @@ class ExcuseRequestDeletionTest extends TestCase
             'end_time' => '09:30',
             'guardian_name' => 'Updated Guardian',
             'guardian_contact' => '09123456789',
-            'document' => UploadedFile::fake()->create('updated-proof.pdf', 100, 'application/pdf'),
         ])->assertRedirect()->assertSessionHas('success');
 
         $request->refresh();
@@ -177,14 +239,96 @@ class ExcuseRequestDeletionTest extends TestCase
         $this->assertSame($newDate, $request->absence_date->toDateString());
         $this->assertSame('Updated Guardian', $request->guardian_name);
         $document = $request->documents()->sole();
-        $this->assertSame('updated-proof.pdf', $document->original_name);
+        $this->assertSame($original->id, $document->id);
         Storage::disk('local')->assertExists($document->path);
         $this->assertDatabaseHas('request_status_histories', [
             'excuse_request_id' => $request->id,
             'new_status' => 'returned',
             'action_by' => $studentUser->id,
-            'remarks' => 'Request details and supporting attachment updated by student.',
+            'remarks' => 'Request details updated by student.',
         ]);
+
+        $this->actingAs($studentUser)->patch(route('requests.update', $request), [
+            'absence_date' => $newDate,
+            'subject_id' => $newSubject->id,
+            'reason_category_id' => $request->reason_category_id,
+            'explanation' => 'The complete excuse request has been updated by the student.',
+            'start_time' => '08:00',
+            'end_time' => '09:30',
+            'document' => UploadedFile::fake()->create('replacement.pdf', 100, 'application/pdf'),
+        ])->assertSessionHasErrors('document');
+        $this->assertSame($original->id, $request->documents()->sole()->id);
+    }
+
+    public function test_student_can_replace_an_attachment_only_while_request_is_a_draft(): void
+    {
+        Storage::fake('local');
+        [$request, $studentUser] = $this->makeRequest();
+        $request->update(['status' => 'draft']);
+        Storage::disk('local')->put('supporting-documents/original.pdf', 'original');
+        $original = $request->documents()->create(['disk' => 'local', 'path' => 'supporting-documents/original.pdf', 'original_name' => 'original.pdf', 'mime_type' => 'application/pdf', 'size' => 8]);
+
+        $this->actingAs($studentUser)->get(route('requests.show', $request))
+            ->assertOk()->assertSee('Replace supporting document');
+        $this->patch(route('requests.attachment.update', $request), [
+            'document' => UploadedFile::fake()->create('draft-proof.pdf', 100, 'application/pdf'),
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $this->assertSame('draft-proof.pdf', $request->documents()->sole()->original_name);
+        $this->assertDatabaseMissing('supporting_documents', ['id' => $original->id]);
+        Storage::disk('local')->assertMissing($original->path);
+
+        foreach (['submitted', 'returned', 'approved'] as $status) {
+            $request->update(['status' => $status]);
+            $this->actingAs($studentUser)->get(route('requests.show', $request))
+                ->assertDontSee('Replace supporting document');
+            $this->patch(route('requests.attachment.update', $request), [
+                'document' => UploadedFile::fake()->create('blocked.pdf', 100, 'application/pdf'),
+            ])->assertForbidden();
+            $this->assertSame('draft-proof.pdf', $request->documents()->sole()->original_name);
+        }
+    }
+
+    public function test_student_cannot_change_details_after_admin_starts_review(): void
+    {
+        [$request, $studentUser] = $this->makeRequest();
+        $request->update(['status' => 'under_review']);
+        $originalExplanation = $request->explanation;
+
+        $this->actingAs($studentUser)->patch(route('requests.update', $request), [
+            'absence_date' => $request->absence_date->toDateString(),
+            'subject_id' => $request->subject_id,
+            'reason_category_id' => $request->reason_category_id,
+            'explanation' => 'This edit must be rejected after administrative review begins.',
+            'start_time' => '08:00',
+            'end_time' => '09:00',
+        ])->assertForbidden();
+
+        $this->assertSame($originalExplanation, $request->fresh()->explanation);
+        $this->assertDatabaseCount('request_status_histories', 0);
+    }
+
+    public function test_attachment_change_is_rejected_if_review_starts_during_scan(): void
+    {
+        Storage::fake('local');
+        [$request, $studentUser] = $this->makeRequest();
+        $request->update(['status' => 'draft']);
+        Storage::disk('local')->put('supporting-documents/original.pdf', 'original');
+        $original = $request->documents()->create([
+            'disk' => 'local', 'path' => 'supporting-documents/original.pdf',
+            'original_name' => 'original.pdf', 'mime_type' => 'application/pdf', 'size' => 8,
+        ]);
+        $this->mock(VirusScanner::class)->shouldReceive('scan')->once()->andReturnUsing(function () use ($request) {
+            $request->update(['status' => 'under_review']);
+        });
+
+        $this->actingAs($studentUser)->patch(route('requests.attachment.update', $request), [
+            'document' => UploadedFile::fake()->create('new.pdf', 100, 'application/pdf'),
+        ])->assertForbidden();
+
+        $this->assertSame($original->id, $request->documents()->sole()->id);
+        Storage::disk('local')->assertExists($original->path);
+        $this->assertSame([$original->path], Storage::disk('local')->allFiles('supporting-documents'));
     }
 
     public function test_student_can_submit_one_request_for_multiple_subjects(): void

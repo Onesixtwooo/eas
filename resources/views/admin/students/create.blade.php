@@ -4,7 +4,7 @@
 <div class="max-w-4xl">
     <a href="{{ route('admin.students.index') }}" class="text-sm font-semibold text-[#245B8E]">← Back to students</a>
     <h1 class="mt-4 text-3xl font-bold text-slate-900">Add Student</h1>
-    <p class="mt-2 text-slate-500">Create a student profile and portal account.</p>
+    <p class="mt-2 text-slate-500">Create a student profile and portal account. A verification code will be emailed to the student. Give the student their temporary password separately so they can sign in and verify their email.</p>
     @if($errors->any())<div class="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700"><b>Please correct the following:</b><ul class="mt-2 list-inside list-disc">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
     <form method="post" action="{{ route('admin.students.store') }}" class="mt-7 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         @csrf

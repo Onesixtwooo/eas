@@ -49,7 +49,6 @@ class StudentNavigationTest extends TestCase
         $this->actingAs($student)
             ->put(route('profile.update'), [
                 'name' => 'Updated Student',
-                'email' => 'updated@example.com',
             ])
             ->assertSessionHasNoErrors()
             ->assertSessionHas('success');
@@ -57,9 +56,28 @@ class StudentNavigationTest extends TestCase
         $this->assertDatabaseHas('users', [
             'id' => $student->id,
             'name' => 'Updated Student',
-            'email' => 'updated@example.com',
+            'email' => $student->email,
             'role' => 'student',
         ]);
+    }
+
+    public function test_student_cannot_change_email_through_profile_request(): void
+    {
+        $student = User::factory()->create(['role' => 'student', 'is_active' => true]);
+
+        $this->actingAs($student)
+            ->put(route('profile.update'), [
+                'name' => 'Updated Student',
+                'email' => 'new@example.com',
+            ])
+            ->assertSessionHasErrors('email', null, 'details');
+
+        $this->assertSame($student->email, $student->fresh()->email);
+        $this->assertSame($student->name, $student->fresh()->name);
+
+        $this->get(route('profile'))
+            ->assertOk()
+            ->assertDontSee('name="email"', false);
     }
 
     public function test_user_must_confirm_current_password_to_change_it(): void
@@ -102,7 +120,6 @@ class StudentNavigationTest extends TestCase
         $this->actingAs($user)
             ->put(route('profile.update'), [
                 'name' => 'Renamed Faculty Prof',
-                'email' => $user->email,
             ])
             ->assertSessionHasNoErrors()
             ->assertSessionHas('success');

@@ -24,7 +24,6 @@ class RealtimeSystemTest extends TestCase
 
         $this->actingAs($admin)->put(route('profile.update'), [
             'name' => 'Updated Administrator',
-            'email' => $admin->email,
         ])->assertSessionHasNoErrors();
 
         $updated = $this->actingAs($admin)

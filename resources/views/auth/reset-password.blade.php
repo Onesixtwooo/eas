@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{{ asset('css/app.css') }}?v={{ filemtime(public_path('css/app.css')) }}">
 </head>
 <body class="grid min-h-screen place-items-center p-5">
+@include('partials.page-loader')
     <form method="post" action="{{ route('password.update') }}" class="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl">
         @csrf
         <input type="hidden" name="token" value="{{ $token }}">

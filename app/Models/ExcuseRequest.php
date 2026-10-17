@@ -10,6 +10,21 @@ class ExcuseRequest extends Model
 
     protected $casts = ['absence_date' => 'date', 'submitted_at' => 'datetime', 'reviewed_at' => 'datetime', 'approved_at' => 'datetime', 'acknowledged_at' => 'datetime', 'completed_at' => 'datetime'];
 
+    public function placementLabel(): string
+    {
+        $course = $this->reported_course_code ?? $this->student?->course?->code;
+        $year = $this->reported_year_level ?? $this->student?->year_level;
+        $section = $this->reported_section_name ?? $this->student?->section?->name;
+
+        return trim($course.' '.$year.($section ? '-'.$section : ''));
+    }
+
+    public function placementMatchesStudent(): bool
+    {
+        return ($this->reported_year_level === null || (int) $this->reported_year_level === (int) $this->student->year_level)
+            && ($this->reported_section_id === null || (int) $this->reported_section_id === (int) $this->student->section_id);
+    }
+
     public function student()
     {
         return $this->belongsTo(Student::class);

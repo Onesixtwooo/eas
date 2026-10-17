@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class InstructorAssignment extends Model
 {
     protected $guarded = [];
-    protected $casts = ['is_active' => 'boolean'];
+    protected $casts = ['is_active' => 'boolean', 'retired_at' => 'datetime'];
 
     public function faculty() { return $this->belongsTo(Faculty::class); }
     public function course() { return $this->belongsTo(Course::class); }

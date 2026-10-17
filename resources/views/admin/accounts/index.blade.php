@@ -9,7 +9,7 @@
         <h1 class="mt-1 text-3xl font-bold text-slate-900">User Accounts</h1>
         <p class="mt-2 text-slate-500">View the administrator, program head, faculty, adviser, and student accounts registered for portal access.</p>
     </div>
-    <a href="{{ route('admin.accounts.create') }}" class="rounded-xl bg-[#123A63] px-5 py-3 text-center font-semibold text-white hover:bg-[#245B8E]">+ Add Account</a>
+    <div class="flex gap-2"><a href="{{ route('admin.account-archives.index') }}" class="rounded-xl border border-slate-300 px-5 py-3 text-center font-semibold text-[#123A63]">Account Archives</a><a href="{{ route('admin.accounts.create') }}" class="rounded-xl bg-[#123A63] px-5 py-3 text-center font-semibold text-white hover:bg-[#245B8E]">+ Add Account</a></div>
 </div>
 
 <form method="get" class="mt-7 grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1fr_220px_180px_auto]">
@@ -61,9 +61,9 @@
                             <div class="flex flex-wrap justify-end gap-2">
                                 <a href="{{ route('admin.accounts.edit', $account) }}" class="rounded-lg border px-3 py-2 font-semibold text-[#245B8E] hover:bg-blue-50">Edit</a>
                                 @if(!$account->is(auth()->user()))
-                                    <form method="post" action="{{ route('admin.accounts.destroy', $account) }}" onsubmit="return confirm('Delete the account for {{ addslashes($account->name) }}? Linked profile records may also be removed. This cannot be undone.')">
+                                    <form method="post" action="{{ route('admin.accounts.destroy', $account) }}" onsubmit="return confirm('Archive and remove this account? If linked records require it, the account will be disabled instead.')">
                                         @csrf @method('DELETE')
-                                        <button class="rounded-lg border border-red-300 px-3 py-2 font-semibold text-red-700 hover:bg-red-50">Delete</button>
+                                        <button class="rounded-lg border border-red-300 px-3 py-2 font-semibold text-red-700 hover:bg-red-50">Archive</button>
                                     </form>
                                 @endif
                             </div>

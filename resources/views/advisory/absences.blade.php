@@ -1,21 +1,27 @@
 @extends('layouts.app')
 
-@section('title', 'Daily Absences')
+@section('title', 'Daily Attendance')
 
 @section('content')
 <div>
     <p class="text-sm font-semibold uppercase tracking-widest text-[#245B8E]">Adviser</p>
-    <h1 class="mt-1 text-3xl font-bold text-slate-900">Daily Absences</h1>
-    <p class="mt-2 text-slate-500">Instructor reports for your Year {{ $yearLevel }} advisory on {{ today()->format('F j, Y') }}.</p>
+    <h1 class="mt-1 text-3xl font-bold text-slate-900">Daily Attendance</h1>
+    <p class="mt-2 text-slate-500">Instructor reports for your Year {{ $yearLevel }} advisory on {{ \Illuminate\Support\Carbon::parse($selectedDate)->format('F j, Y') }}.</p>
 </div>
+
+<form method="get" action="{{ route('advisory.absences') }}" class="mt-5 flex flex-wrap items-end gap-3">
+    @if(request('section_id'))<input type="hidden" name="section_id" value="{{ request('section_id') }}">@endif
+    <div><label for="report_date" class="block text-sm font-semibold text-slate-700">Report date</label><input id="report_date" type="date" name="report_date" value="{{ $selectedDate }}" max="{{ today()->toDateString() }}" class="mt-1 rounded-lg border border-slate-300"></div>
+    <button class="rounded-lg bg-[#123A63] px-4 py-2 font-semibold text-white">View reports</button>
+</form>
 
 <section class="mt-7 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
     <div class="border-b border-slate-200 px-4 pt-4">
         <p class="mb-3 text-xs font-bold uppercase tracking-widest text-slate-500">Blocks</p>
         <nav class="flex gap-2 overflow-x-auto" aria-label="Absence report blocks">
-            <a href="{{ route('advisory.absences') }}" class="whitespace-nowrap rounded-t-xl border-b-2 px-5 py-3 text-sm font-semibold transition {{ request('section_id') ? 'border-transparent text-slate-500 hover:text-[#123A63]' : 'border-[#123A63] bg-blue-50 text-[#123A63]' }}">All Blocks</a>
+            <a href="{{ route('advisory.absences', ['report_date' => $selectedDate]) }}" class="whitespace-nowrap rounded-t-xl border-b-2 px-5 py-3 text-sm font-semibold transition {{ request('section_id') ? 'border-transparent text-slate-500 hover:text-[#123A63]' : 'border-[#123A63] bg-blue-50 text-[#123A63]' }}">All Blocks</a>
             @foreach($sections as $section)
-                <a href="{{ route('advisory.absences', ['section_id' => $section->id]) }}" class="whitespace-nowrap rounded-t-xl border-b-2 px-5 py-3 text-sm font-semibold transition {{ (int) request('section_id') === $section->id ? 'border-[#123A63] bg-blue-50 text-[#123A63]' : 'border-transparent text-slate-500 hover:text-[#123A63]' }}">Block {{ $section->name }}<span class="ml-1 text-xs font-normal">({{ $section->course->code }})</span></a>
+                <a href="{{ route('advisory.absences', ['section_id' => $section->id, 'report_date' => $selectedDate]) }}" class="whitespace-nowrap rounded-t-xl border-b-2 px-5 py-3 text-sm font-semibold transition {{ (int) request('section_id') === $section->id ? 'border-[#123A63] bg-blue-50 text-[#123A63]' : 'border-transparent text-slate-500 hover:text-[#123A63]' }}">Block {{ $section->name }}<span class="ml-1 text-xs font-normal">({{ $section->course->code }})</span></a>
             @endforeach
         </nav>
     </div>
@@ -23,13 +29,13 @@
 
 <section class="mt-5 overflow-hidden rounded-2xl border border-red-200 bg-white shadow-sm">
     <div class="flex items-center justify-between gap-4 border-b border-red-100 bg-red-50 p-5">
-        <div><h2 class="font-bold text-red-900">Absent Today</h2><p class="mt-1 text-sm text-red-700">{{ request('section_id') ? 'Showing the selected block.' : 'Showing all advisory blocks.' }}</p></div>
+        <div><h2 class="font-bold text-red-900">Absent, Late, or Corrected {{ $canRespond ? 'Today' : 'Reports' }}</h2><p class="mt-1 text-sm text-red-700">{{ request('section_id') ? 'Showing the selected block.' : 'Showing all advisory blocks.' }}</p></div>
         <span class="grid size-11 shrink-0 place-items-center rounded-full bg-red-600 font-bold text-white">{{ $absentStudents->count() }}</span>
     </div>
     <div class="divide-y divide-slate-100">
         @forelse($absentStudents as $student)
             <article class="grid gap-4 p-5 lg:grid-cols-[minmax(15rem,.65fr)_minmax(0,1.35fr)]">
-                <div><p class="font-semibold text-slate-900">{{ $student->user->name }}</p><p class="text-sm text-slate-500">{{ $student->student_number }} · {{ $student->course->code }} Year {{ $student->year_level }}, Block {{ $student->section->name }}</p></div>
+                <div><p class="font-semibold text-slate-900">{{ $student->user->name }}</p><p class="text-sm text-slate-500">{{ $student->student_number }}</p></div>
                 <div class="grid gap-3">
                     @foreach($student->dailyAbsenceReports as $report)
                         @php
@@ -46,10 +52,12 @@
                                 default => 'bg-slate-100 text-slate-700',
                             };
                         @endphp
-                        <div class="rounded-xl border border-red-100 bg-red-50 p-3 text-xs text-red-700">
-                            <div class="flex flex-wrap items-center justify-between gap-2"><b>{{ $report->assignment->subject->code }} · {{ $report->assignment->faculty->display_name }}</b><span class="rounded-full px-3 py-1 font-bold {{ $actionColor }}">{{ $actionLabel }}</span></div>
+                        <div class="rounded-xl border p-3 text-xs {{ $report->attendance_status === 'present' ? 'border-emerald-100 bg-emerald-50 text-emerald-900' : 'border-red-100 bg-red-50 text-red-700' }}">
+                            <p class="mb-2 text-slate-600">{{ $report->reported_course_code }} Year {{ $report->reported_year_level }}, Block {{ $report->reported_section_name }}</p>
+                            <div class="flex flex-wrap items-center justify-between gap-2"><b>{{ $report->assignment->subject->code }} · {{ $report->assignment->faculty->display_name }}</b><span class="rounded-full px-3 py-1 font-bold {{ match($report->attendance_status) {'late' => 'bg-amber-100 text-amber-800', 'present' => 'bg-emerald-100 text-emerald-800', default => 'bg-red-100 text-red-800'} }}">{{ $report->attendance_status === 'present' ? 'Corrected to Present' : ucfirst($report->attendance_status) }}</span><span class="rounded-full px-3 py-1 font-bold {{ $actionColor }}">{{ $actionLabel }}</span></div>
                             @if($report->comment)<p class="mt-2 text-slate-600"><b>Instructor comment:</b> {{ $report->comment }}</p>@endif
 
+                            @if($canRespond)
                             <form method="post" action="{{ route('advisory.absences.action', $report) }}" class="mt-3 flex flex-wrap gap-2">@csrf @method('PATCH')
                                 <button name="adviser_action" value="acknowledged" class="rounded-lg border border-blue-300 px-3 py-2 font-semibold text-blue-800 hover:bg-blue-100">Acknowledge</button>
                                 <button name="adviser_action" value="resolved" class="rounded-lg border border-emerald-300 px-3 py-2 font-semibold text-emerald-800 hover:bg-emerald-100">Mark Resolved</button>
@@ -62,12 +70,15 @@
                                 <button class="rounded-lg bg-[#123A63] px-4 py-2 font-semibold text-white">{{ $report->adviser_comment ? 'Update Reply' : 'Send Reply' }}</button>
                             </form>
                             @error('adviser_comment')<p class="mt-1 text-xs text-red-700">{{ $message }}</p>@enderror
+                            @else
+                                @if($report->adviser_comment)<p class="mt-2 text-slate-700"><b>Adviser response:</b> {{ $report->adviser_comment }}</p>@endif
+                            @endif
                         </div>
                     @endforeach
                 </div>
             </article>
         @empty
-            <p class="px-6 py-14 text-center text-slate-500">No students have been reported absent today.</p>
+            <p class="px-6 py-14 text-center text-slate-500">No absent, late, or corrected reports for this date.</p>
         @endforelse
     </div>
 </section>

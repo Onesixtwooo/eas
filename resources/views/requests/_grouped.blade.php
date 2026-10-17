@@ -31,7 +31,7 @@
                                 <div class="shrink-0">@include('requests._badge', ['status' => $item->status])</div>
                             </div>
                             <dl class="mt-4 grid grid-cols-2 gap-4 border-y border-slate-100 py-4 text-sm">
-                                <div><dt class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Absence date</dt><dd class="mt-1 font-semibold text-slate-800">{{ $item->absence_date->format('M d, Y') }}</dd></div>
+                                <div><dt class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Absence date</dt><dd class="mt-1 font-semibold text-slate-800">{{ $item->absence_date->format('M d, Y') }}</dd><dd class="mt-1 text-xs text-slate-500">{{ $item->placementLabel() }}</dd></div>
                                 <div><dt class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Covered classes</dt><dd class="mt-1"><button type="button" onclick="document.getElementById('covered-classes-{{ $item->id }}').showModal()" class="font-semibold text-[#245B8E]">{{ $rowSubjects->count() }} {{ Str::plural('class', $rowSubjects->count()) }} &rarr;</button></dd></div>
                             </dl>
                             <a href="{{ route('requests.show', $item) }}" class="mt-4 block w-full rounded-xl bg-[#123A63] px-4 py-2.5 text-center text-sm font-semibold text-white">View Request</a>
@@ -46,7 +46,7 @@
                             @foreach($student->requests as $item)
                                 @php($rowSubjects = $item->subjects->isNotEmpty() ? $item->subjects : collect([$item->subject]))
                                 <tr class="hover:bg-slate-50">
-                                    <td class="px-4 py-4 align-top font-semibold text-[#123A63]">{{ $item->reference_number ?? 'Awaiting reference' }}<span class="mt-1 block text-xs font-normal text-slate-500">Submitted {{ $item->submitted_at?->format('M d, Y') ?? 'Not submitted' }}</span></td>
+                                    <td class="px-4 py-4 align-top font-semibold text-[#123A63]">{{ $item->reference_number ?? 'Awaiting reference' }}<span class="mt-1 block text-xs font-normal text-slate-500">{{ $item->placementLabel() }}</span><span class="mt-1 block text-xs font-normal text-slate-500">Submitted {{ $item->submitted_at?->format('M d, Y') ?? 'Not submitted' }}</span></td>
                                     <td class="px-4 py-4 align-top font-medium text-slate-800">{{ $item->absence_date->format('M d, Y') }}</td>
                                     <td class="px-4 py-4 align-top"><button type="button" onclick="document.getElementById('covered-classes-{{ $item->id }}').showModal()" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-[#123A63] hover:bg-white">{{ $rowSubjects->count() }} {{ Str::plural('class', $rowSubjects->count()) }} <span aria-hidden="true">&rarr;</span></button></td>
                                     <td class="px-4 py-4 align-top">@include('requests._badge', ['status' => $item->status])</td>
@@ -73,6 +73,12 @@
                         </div>
                     </dialog>
                 @endforeach
+                @if($student->visible_requests_count > $student->requests->count() && !$historyPages)
+                    <a href="{{ route('requests.index', array_merge(request()->except(['student_id', 'page', 'request_page']), ['student_id' => $student->id])) }}" class="mt-5 inline-flex rounded-xl border border-[#123A63] px-4 py-2 text-sm font-semibold text-[#123A63] hover:bg-white">View all {{ $student->visible_requests_count }} matching requests</a>
+                @endif
+                @if($historyPages && $historyPages->hasPages())
+                    <div class="mt-5">{{ $historyPages->links() }}</div>
+                @endif
             </div>
         </details>
     @empty

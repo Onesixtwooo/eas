@@ -12,6 +12,7 @@ use App\Models\Semester;
 use App\Models\Student;
 use App\Models\Subject;
 use App\Models\User;
+use App\Services\RequestWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -19,6 +20,35 @@ use Tests\TestCase;
 class AdminRequestReviewTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_workflow_rechecks_status_when_given_a_stale_request_model(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $studentUser = User::factory()->create(['role' => 'student', 'is_active' => true]);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
+        $section = Section::create(['course_id' => $course->id, 'name' => 'A', 'year_level' => 1]);
+        $student = Student::create([
+            'user_id' => $studentUser->id, 'student_number' => '2026-0999',
+            'course_id' => $course->id, 'section_id' => $section->id, 'year_level' => 1,
+        ]);
+        $faculty = Faculty::create(['name' => 'Maria Reyes']);
+        $subject = Subject::create(['code' => 'TEST101', 'name' => 'Test Subject', 'course_id' => $course->id]);
+        $year = AcademicYear::create(['name' => '2026-2027', 'is_current' => true]);
+        $semester = Semester::create(['name' => 'First Semester', 'is_current' => true]);
+        $reason = ReasonCategory::create(['name' => 'Illness', 'is_active' => true]);
+        $request = ExcuseRequest::create([
+            'student_id' => $student->id, 'subject_id' => $subject->id,
+            'facilitator_id' => $faculty->id, 'academic_year_id' => $year->id,
+            'semester_id' => $semester->id, 'reason_category_id' => $reason->id,
+            'absence_date' => today(), 'explanation' => 'Test request.', 'status' => 'submitted',
+        ]);
+
+        $this->actingAs($admin);
+        app(RequestWorkflowService::class)->transition($request, 'under_review');
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        app(RequestWorkflowService::class)->transition($request, 'under_review');
+    }
 
     public function test_system_admin_can_review_and_approve_a_request(): void
     {
@@ -71,6 +101,10 @@ class AdminRequestReviewTest extends TestCase
             ->assertOk()
             ->assertDontSee('Antolin Catabona');
 
+        $this->actingAs($admin)->put(route('requests.settings.update'), [
+            'program_head_name' => 'Dr. Original Issuer',
+        ])->assertSessionHasNoErrors();
+
         $this->actingAs($admin)
             ->post(route('requests.review', $request->fresh()), ['decision' => 'approved', 'slip_remark' => 'EXCUSED'])
             ->assertSessionHasNoErrors();
@@ -78,7 +112,11 @@ class AdminRequestReviewTest extends TestCase
         $request->refresh();
         $this->assertSame('approved', $request->status);
         $this->assertSame($admin->id, $request->reviewed_by);
+        $this->assertSame('Dr. Original Issuer', $request->slip_issuer_name);
         $this->assertTrue(Str::isUuid($request->reference_number));
+        $this->actingAs($admin)->put(route('requests.settings.update'), [
+            'program_head_name' => 'Dr. New Issuer',
+        ])->assertSessionHasNoErrors();
         $this->actingAs($admin)
             ->get(route('requests.show', $request))
             ->assertOk()
@@ -92,12 +130,14 @@ class AdminRequestReviewTest extends TestCase
             ->assertOk()
             ->assertSee('SCAN TO VERIFY')
             ->assertSee('To the following instructors of:')
+            ->assertSee('DR. ORIGINAL ISSUER')
+            ->assertDontSee('DR. NEW ISSUER')
             ->assertSee('data:image/svg+xml;base64,', false);
 
         $this->actingAs($admin)
             ->get(route('dashboard'))
             ->assertOk()
-            ->assertSee('Late Students')
+            ->assertSee('Late excuse submissions')
             ->assertSee('Excused Students')
             ->assertSee('Student Excuse Analytics')
             ->assertViewHas('lateStudents', 0)

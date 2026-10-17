@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreInstructorRequest;
 use App\Mail\AdministratorAccountCreated;
+use App\Services\InvalidateUserSessions;
 use App\Models\Faculty;
 use App\Models\InstructorAssignment;
 use App\Models\User;
@@ -122,7 +123,7 @@ class InstructorController extends Controller
         return view('admin.faculty.edit', compact('faculty'));
     }
 
-    public function update(Request $request, Faculty $faculty)
+    public function update(Request $request, Faculty $faculty, InvalidateUserSessions $invalidateSessions)
     {
         $faculty->load('user');
         $data = $request->validate([
@@ -130,17 +131,20 @@ class InstructorController extends Controller
             'employee_number' => ['nullable', 'string', 'max:255', Rule::unique('faculty', 'employee_number')->ignore($faculty)],
             'designation' => ['required', 'string', 'max:255'],
             'email' => $faculty->user_id
-                ? ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($faculty->user)]
+                ? ['required', 'email', 'max:255']
                 : ['nullable'],
             'is_active' => $faculty->user_id ? ['required', 'boolean'] : ['nullable'],
             'password' => $faculty->user_id ? ['nullable', 'string', 'min:8', 'confirmed'] : ['nullable'],
         ]);
 
+        if ($faculty->user_id && $data['email'] !== $faculty->user->email) {
+            return back()->withErrors(['email' => 'An account email address cannot be changed.'])->withInput();
+        }
         if ($faculty->user?->is($request->user()) && ! (bool) $data['is_active']) {
             return back()->withErrors(['is_active' => 'You cannot disable the account you are currently logged into.'])->withInput();
         }
 
-        DB::transaction(function () use ($faculty, $data) {
+        DB::transaction(function () use ($faculty, $data, $request, $invalidateSessions) {
             $faculty->update([
                 'name' => trim($data['name']),
                 'employee_number' => filled($data['employee_number'] ?? null) ? trim($data['employee_number']) : null,
@@ -150,14 +154,20 @@ class InstructorController extends Controller
             if ($faculty->user_id) {
                 $faculty->user->fill([
                     'name' => trim($data['name']),
-                    'email' => $data['email'],
                 ]);
                 if (filled($data['password'] ?? null)) {
                     $faculty->user->password = $data['password'];
+                    $faculty->user->remember_token = Str::random(60);
                 }
                 $faculty->user->forceFill([
                     'is_active' => (bool) $data['is_active'],
                 ])->save();
+                if (filled($data['password'] ?? null)) {
+                    $invalidateSessions(
+                        $faculty->user,
+                        $faculty->user->is($request->user()) ? $request->session()->getId() : null
+                    );
+                }
             }
         });
 

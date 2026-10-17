@@ -3,13 +3,26 @@
 @section('content')
 @php
     $editingAssignment = $editingAssignments->first();
+    $editingAmbiguousSubjects = $editingAssignments->groupBy('subject_id')->filter(fn ($items) =>
+        $items->contains(fn ($item) => $item->section_id === null)
+        && $items->contains(fn ($item) => $item->section_id !== null)
+    )->keys();
+    $editingSubjectBlocks = $editingAssignments->groupBy('subject_id')->map(fn ($items) =>
+        $items->contains(fn ($item) => $item->section_id === null) && $items->contains(fn ($item) => $item->section_id !== null)
+            ? []
+            : ($items->contains(fn ($item) => $item->section_id === null)
+            ? ['all']
+            : $items->pluck('section.name')->filter()->unique()->sort()->values()->all())
+    )->all();
+    $selectedSubjectIds = old('subject_ids', $editingAssignments->pluck('subject_id')->unique()->values()->all());
+    $selectedSubjectBlocks = old('subject_blocks', $editingSubjectBlocks);
 @endphp
-<div x-data="{ instructorModal: @js($errors->has('name') || $errors->has('designation')), assignmentModal: @js($editingAssignment || $errors->has('faculty_id') || $errors->has('course_id') || $errors->has('year_levels') || $errors->has('subject_ids')) }">
+<div x-data="{ instructorModal: @js($errors->has('name') || $errors->has('designation')), assignmentModal: @js($editingAssignment || $errors->has('faculty_id') || $errors->has('course_id') || $errors->has('year_levels') || $errors->hasAny(['subject_blocks', 'subject_blocks.*']) || $errors->has('subject_ids')) }">
     <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
             <p class="text-sm font-semibold uppercase tracking-widest text-[#245B8E]">Administration</p>
             <h1 class="mt-1 text-3xl font-bold text-slate-900">Instructor Assignments</h1>
-            <p class="mt-2 text-slate-500">Assign an instructor to a year level, then choose the subjects they handle.</p>
+            <p class="mt-2 text-slate-500">Assign an instructor to a year level, block, and the subjects they handle.</p>
         </div>
         <div class="flex flex-wrap gap-3">
             <button type="button" @click="assignmentModal = true" class="rounded-xl border border-[#123A63] bg-white px-5 py-3 text-center font-semibold text-[#123A63] hover:bg-blue-50">+ New Assignment</button>
@@ -44,13 +57,15 @@
             <div class="flex items-start justify-between gap-4 border-b pb-4">
                 <div>
                     <h2 id="new-assignment-title" class="text-xl font-bold text-[#123A63]">{{ $editingAssignment ? 'Edit Assignment' : 'New Assignment' }}</h2>
-                    <p class="mt-1 text-sm text-slate-500">Choose an instructor, course, year level, and the subjects they will handle.</p>
+                    <p class="mt-1 text-sm text-slate-500">Choose an instructor, course, and year levels, then choose blocks separately for each subject. @if($editingAssignment) Saving replaces this instructor's assignments for the course. @endif</p>
+                    @if($editingAmbiguousSubjects->isNotEmpty())<p class="mt-2 text-sm font-semibold text-amber-700">Some subjects have both All Blocks and specific block assignments. Choose their blocks before saving.</p>@endif
                 </div>
                 <button type="button" @click="assignmentModal = false" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close">&times;</button>
             </div>
-<form method="post" action="{{ $editingAssignment ? route('admin.instructor-assignments.group-update', [$editingAssignment->faculty_id, $editingAssignment->course_id]) : route('admin.instructor-assignments.store') }}" class="mt-5" x-data="{ selectedCourse: '{{ old('course_id', $editingAssignment?->course_id) }}', selectedYears: @js(old('year_levels', old('year_level') ? [old('year_level')] : $editingAssignments->pluck('year_level')->unique()->values()->all())), isYearSelected(year) { return this.selectedYears.includes(String(year)) || this.selectedYears.includes(Number(year)); }, resetSubjects() { this.$refs.subjects.querySelectorAll('input[type=checkbox]').forEach(input => { if (input.dataset.course !== this.selectedCourse || (input.dataset.year && ! this.isYearSelected(input.dataset.year))) input.checked = false }) } }">
+<form method="post" action="{{ $editingAssignment ? route('admin.instructor-assignments.group-update', [$editingAssignment->faculty_id, $editingAssignment->course_id]) : route('admin.instructor-assignments.store') }}" class="mt-5" x-data="{ selectedCourse: '{{ old('course_id', $editingAssignment?->course_id) }}', selectedYears: @js(old('year_levels', old('year_level') ? [old('year_level')] : $editingAssignments->pluck('year_level')->unique()->values()->all())), selectedSubjects: @js(array_map('strval', $selectedSubjectIds)), isYearSelected(year) { return this.selectedYears.includes(String(year)) || this.selectedYears.includes(Number(year)); }, resetSubjects() { this.selectedSubjects = this.selectedSubjects.filter(id => { const input = this.$refs.subjects.querySelector('input[data-subject-id="' + id + '"]'); return input && input.dataset.course === this.selectedCourse && (!input.dataset.year || this.isYearSelected(input.dataset.year)); }); } }">
     @csrf
     @if($editingAssignment) @method('PUT') @endif
+    <input type="hidden" name="subject_block_selection_submitted" value="1">
     @if($errors->any())
         <div class="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{{ $errors->first() }}</div>
     @endif
@@ -98,26 +113,35 @@
             <span class="grid size-8 place-items-center rounded-full bg-[#123A63] text-sm font-bold text-white">2</span>
             <div>
                 <h3 class="font-semibold text-slate-900">Assign subjects</h3>
-                <p class="text-sm text-slate-500">Select every subject this instructor handles for the selected year levels. A subject may be assigned to more than one instructor.</p>
+                <p class="text-sm text-slate-500">Select each subject and the blocks this instructor handles for it. Another instructor may handle the same subject in different blocks.</p>
             </div>
         </div>
         <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3" x-show="selectedCourse && selectedYears.length" x-ref="subjects">
             @foreach($subjects as $subject)
-                <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-4 hover:border-[#245B8E] hover:bg-blue-50" x-show="selectedCourse == '{{ $subject->course_id }}' && (! '{{ $subject->year_level }}' || isYearSelected('{{ $subject->year_level }}'))">
-                    <input type="checkbox" name="subject_ids[]" value="{{ $subject->id }}" data-course="{{ $subject->course_id }}" data-year="{{ $subject->year_level }}" class="mt-1 size-4 w-auto" @checked(in_array($subject->id, old('subject_ids', $editingAssignments->pluck('subject_id')->unique()->all())))>
-                    <span>
-                        <b class="text-[#123A63]">{{ $subject->code }}</b>
-                        <span class="block text-sm text-slate-500">{{ $subject->name }}</span>
-                    </span>
-                </label>
+                <div class="rounded-xl border border-slate-200 p-4 hover:border-[#245B8E]" x-show="selectedCourse == '{{ $subject->course_id }}' && (! '{{ $subject->year_level }}' || isYearSelected('{{ $subject->year_level }}'))" data-subject-card>
+                    <label class="flex cursor-pointer items-start gap-3">
+                        <input type="checkbox" name="subject_ids[]" value="{{ $subject->id }}" data-subject-id="{{ $subject->id }}" data-course="{{ $subject->course_id }}" data-year="{{ $subject->year_level }}" x-model="selectedSubjects" class="mt-1 size-4 w-auto">
+                        <span><b class="text-[#123A63]">{{ $subject->code }}</b><span class="block text-sm text-slate-500">{{ $subject->name }}</span></span>
+                    </label>
+                    <div class="mt-4 border-t pt-3" x-show="selectedSubjects.includes('{{ $subject->id }}')" x-cloak>
+                        <p class="mb-2 text-xs font-semibold text-slate-600">Blocks for {{ $subject->code }} *</p>
+                        <div class="flex flex-wrap gap-2">
+                            @foreach(['all' => 'All Blocks', 'A' => 'A', 'B' => 'B', 'C' => 'C', 'D' => 'D', 'E' => 'E', 'F' => 'F', 'G' => 'G'] as $block => $label)
+                                <label class="flex cursor-pointer items-center gap-1 rounded-lg border border-slate-200 px-2 py-1 text-xs hover:bg-blue-50"><input type="checkbox" name="subject_blocks[{{ $subject->id }}][]" value="{{ $block }}" data-block class="size-4 w-auto" :disabled="!selectedSubjects.includes('{{ $subject->id }}')" @change="if ($el.checked) $el.closest('[data-subject-card]').querySelectorAll('input[data-block]').forEach(input => { if (input !== $el && (input.value === 'all' || $el.value === 'all')) input.checked = false })" @checked(in_array($block, $selectedSubjectBlocks[$subject->id] ?? ['all']))>{{ $label }}</label>
+                            @endforeach
+                        </div>
+                        @error('subject_blocks.'.$subject->id)<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                    </div>
+                </div>
             @endforeach
         </div>
+        @error('subject_blocks')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
         <p class="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500" x-show="! selectedCourse || ! selectedYears.length">Choose a course and at least one year level first to see its available subjects.</p>
     </div>
 
             <div class="mt-7 flex justify-end gap-3 border-t pt-5">
                 <button type="button" @click="assignmentModal = false" class="rounded-xl border px-5 py-3 font-semibold">Cancel</button>
-                <button class="rounded-xl bg-[#123A63] px-6 py-3 font-semibold text-white">Save Year-Level Assignment</button>
+                <button class="rounded-xl bg-[#123A63] px-6 py-3 font-semibold text-white">Save Assignment</button>
             </div>
         </form>
         </div>
@@ -140,7 +164,7 @@
     <div class="instructor-table-wrap overflow-x-auto">
         <table class="instructor-table w-full min-w-[850px] text-left text-sm">
             <thead class="bg-slate-50 text-xs uppercase text-slate-500">
-                <tr><th class="px-5 py-4">Instructor</th><th class="px-5 py-4">Course</th><th class="px-5 py-4">Year Level</th><th class="px-5 py-4">Subject</th><th class="px-5 py-4">Status</th><th class="px-5 py-4 text-right">Actions</th></tr>
+                <tr><th class="px-5 py-4">Instructor</th><th class="px-5 py-4">Course</th><th class="px-5 py-4">Year Level</th><th class="px-5 py-4">Blocks</th><th class="px-5 py-4">Subject</th><th class="px-5 py-4">Status</th><th class="px-5 py-4 text-right">Actions</th></tr>
             </thead>
             <tbody class="divide-y">
                 @forelse($assignments as $group)
@@ -157,6 +181,11 @@
                                     <span class="whitespace-nowrap rounded-lg bg-blue-50 px-2 py-1 text-xs font-semibold text-[#123A63]">Year {{ $year }}</span>
                                 @endforeach
                             </div>
+                        </td>
+                        <td class="instructor-col-blocks px-5 py-4">
+                            @foreach($group->groupBy('subject_id') as $subjectAssignments)
+                                <div><b>{{ $subjectAssignments->first()->subject->code }}</b>: {{ $subjectAssignments->map(fn ($item) => $item->section?->name ?? 'All')->unique()->sort()->join(', ') }}</div>
+                            @endforeach
                         </td>
                         <td class="instructor-col-subjects px-5 py-4">
                             <div class="flex flex-wrap gap-2">
@@ -180,7 +209,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="6" class="px-6 py-14 text-center text-slate-400">No instructor assignments found.</td></tr>
+                    <tr><td colspan="7" class="px-6 py-14 text-center text-slate-400">No instructor assignments found.</td></tr>
                 @endforelse
             </tbody>
         </table>
@@ -231,10 +260,12 @@
     .instructor-col-name::before { content: "Instructor"; }
     .instructor-col-course::before { content: "Course"; }
     .instructor-col-years::before { content: "Year levels"; }
+    .instructor-col-blocks::before { content: "Blocks"; }
     .instructor-col-subjects::before { content: "Subjects"; }
     .instructor-col-status::before { content: "Status"; }
     .instructor-col-actions::before { content: "Actions"; }
     .instructor-col-years,
+    .instructor-col-blocks,
     .instructor-col-subjects,
     .instructor-col-status,
     .instructor-col-actions {

@@ -9,9 +9,10 @@
         <h1 class="mt-1 text-3xl font-bold text-slate-900">Students</h1>
         <p class="mt-2 text-slate-500">View and manage registered student accounts.</p>
     </div>
-    <a href="{{ route('admin.students.create') }}" class="rounded-xl bg-[#123A63] px-5 py-3 text-center font-semibold text-white hover:bg-[#245B8E]">
-        + Add Student
-    </a>
+    <div class="flex gap-2">
+        <a href="{{ route('admin.account-archives.index') }}" class="rounded-xl border border-slate-300 px-5 py-3 text-center font-semibold text-[#123A63]">Account Archives</a>
+        <a href="{{ route('admin.students.create') }}" class="rounded-xl bg-[#123A63] px-5 py-3 text-center font-semibold text-white hover:bg-[#245B8E]">+ Add Student</a>
+    </div>
 </div>
 
 <div class="mt-7 grid gap-4 sm:grid-cols-4">
@@ -56,10 +57,13 @@
 </form>
 
 <div class="mt-5" x-data="{ selected: [], allIds: @js($students->pluck('id')->values()), toggleAll(event) { this.selected = event.target.checked ? [...this.allIds] : [] } }">
-    <form id="bulk-delete-form" method="post" action="{{ route('admin.students.bulk-destroy') }}" class="mb-3 flex min-h-11 items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-2" x-show="selected.length > 0" x-cloak onsubmit="return confirm('Permanently delete all selected students and their linked records? This cannot be undone.')">
-        @csrf @method('DELETE')
-        <p class="text-sm font-semibold text-red-800"><span x-text="selected.length"></span> student(s) selected</p>
-        <button class="rounded-lg bg-[#B3262E] px-4 py-2 text-sm font-semibold text-white hover:bg-red-800">Delete Selected</button>
+    <form id="bulk-action-form" method="post" action="{{ route('admin.students.bulk-deactivate') }}" class="mb-3 flex min-h-11 flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2" x-show="selected.length > 0" x-cloak onsubmit="return confirm(event.submitter?.value === 'DELETE' ? 'Archive selected accounts and their linked records?' : 'Deactivate the selected student accounts?')">
+        @csrf
+        <p class="text-sm font-semibold text-slate-700"><span x-text="selected.length"></span> student(s) selected</p>
+        <div class="flex flex-wrap gap-2">
+            <button type="submit" class="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-100">Deactivate Selected</button>
+            <button type="submit" formaction="{{ route('admin.students.bulk-destroy') }}" name="_method" value="DELETE" class="rounded-lg bg-[#B3262E] px-4 py-2 text-sm font-semibold text-white hover:bg-red-800">Archive Selected</button>
+        </div>
     </form>
     @error('student_ids')<div class="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{{ $message }}</div>@enderror
 <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -77,7 +81,7 @@
             <tbody class="divide-y divide-slate-100">
                 @forelse($students as $student)
                     <tr class="hover:bg-slate-50">
-                        <td class="student-col-select px-5 py-4"><input form="bulk-delete-form" type="checkbox" name="student_ids[]" value="{{ $student->id }}" x-model.number="selected" class="size-4 w-auto rounded" aria-label="Select {{ $student->user->name }}"></td>
+                        <td class="student-col-select px-5 py-4"><input form="bulk-action-form" type="checkbox" name="student_ids[]" value="{{ $student->id }}" x-model.number="selected" class="size-4 w-auto rounded" aria-label="Select {{ $student->user->name }}"></td>
                         <td class="student-col-identity px-5 py-4">
                             <div class="flex items-center gap-3">
                                 <span class="relative grid size-10 shrink-0 place-items-center rounded-full bg-[#123A63] font-bold text-white">{{ strtoupper(substr($student->user->name, 0, 1)) }}<span data-presence-user="{{ $student->user_id }}" title="Offline" class="absolute -bottom-0.5 -right-0.5 size-3.5 rounded-full border-2 border-white bg-slate-300"></span></span>
@@ -103,13 +107,15 @@
                                         <button class="rounded-lg bg-emerald-600 px-3 py-2 font-semibold text-white hover:bg-emerald-700">Verify</button>
                                     </form>
                                 @endif
+                                @unless($student->user->registration_declined_at)
                                 <form method="post" action="{{ route('admin.students.status', $student) }}" onsubmit="return confirm('{{ $student->user->is_active ? 'Deactivate' : 'Activate' }} this student account?')">
                                     @csrf @method('PATCH')
                                     <button class="rounded-lg px-3 py-2 font-semibold {{ $student->user->is_active ? 'bg-red-50 text-red-700 hover:bg-red-100' : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' }}">{{ $student->user->is_active ? 'Deactivate' : 'Activate' }}</button>
                                 </form>
-                                <form method="post" action="{{ route('admin.students.destroy', $student) }}" onsubmit="return confirm('Permanently delete {{ addslashes($student->user->name) }} and all linked records? This cannot be undone.')">
+                                @endunless
+                                <form method="post" action="{{ route('admin.students.destroy', $student) }}" onsubmit="return confirm('Archive {{ addslashes($student->user->name) }} and linked records?')">
                                     @csrf @method('DELETE')
-                                    <button class="rounded-lg border border-red-300 px-3 py-2 font-semibold text-red-700 hover:bg-red-50">Delete</button>
+                                    <button class="rounded-lg border border-red-300 px-3 py-2 font-semibold text-red-700 hover:bg-red-50">Archive</button>
                                 </form>
                             </div>
                         </td>

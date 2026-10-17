@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class MessageConversationState extends Model
 {
-    protected $fillable = ['user_id', 'student_id', 'archived_at', 'deleted_before_message_id'];
+    protected $fillable = ['user_id', 'student_id', 'partner_id', 'archived_at', 'deleted_before_message_id', 'last_read_message_id'];
 
     protected function casts(): array
     {

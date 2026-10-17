@@ -75,7 +75,7 @@ class AdviserAdvisoryTest extends TestCase
             ->assertSee('Visible Student')
             ->assertDontSee('Hidden Student')
             ->assertDontSee('Absent Today')
-            ->assertSee('Daily Absences')
+            ->assertSee('Daily Attendance')
             ->assertDontSee('Delete');
     }
 

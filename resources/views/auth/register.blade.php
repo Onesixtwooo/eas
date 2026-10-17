@@ -7,6 +7,7 @@
     <link rel="stylesheet" href="{{ asset('css/app.css') }}?v={{ filemtime(public_path('css/app.css')) }}">
 </head>
 <body class="min-h-screen bg-[#F5F7FA]">
+@include('partials.page-loader')
 <main class="grid min-h-screen lg:grid-cols-[.8fr_1.2fr]">
     <section class="sticky top-0 hidden h-screen flex-col justify-between bg-[#123A63] p-12 text-white lg:flex">
         <a href="{{ route('login') }}" class="flex items-center gap-3"><img src="{{ asset('images.jpg') }}" alt="OLSHCO logo" class="size-12 rounded-full bg-white object-cover"><span><b class="block">OLSHCO EAS</b><span class="text-xs text-blue-200">College Department</span></span></a>

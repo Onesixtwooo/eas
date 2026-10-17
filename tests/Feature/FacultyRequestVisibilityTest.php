@@ -60,6 +60,12 @@ class FacultyRequestVisibilityTest extends TestCase
             ->assertOk()
             ->assertSee('EAS-VISIBLE')
             ->assertDontSee('EAS-SECOND');
+        $this->actingAs($facultyUser)->get(route('requests.index', ['student_id' => $student->id, 'subject_id' => $subject->id]))
+            ->assertOk()
+            ->assertSee('EAS-VISIBLE')
+            ->assertDontSee('EAS-SECOND')
+            ->assertDontSee('EAS-OTHER')
+            ->assertDontSee('EAS-PENDING');
         $this->actingAs($facultyUser)->get(route('requests.index', ['subject_id' => $otherSubject->id]))
             ->assertRedirect()
             ->assertSessionHas('error');

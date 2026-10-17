@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\ExcuseRequest;
+use App\Models\SystemSetting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -20,11 +21,11 @@ class RequestWorkflowService
 
     public function transition(ExcuseRequest $request, string $to, ?string $remarks = null, ?string $slipRemark = null): ExcuseRequest
     {
-        if (! in_array($to, $this->flows[$request->status] ?? [], true)) {
-            throw ValidationException::withMessages(['status' => 'This status transition is not allowed.']);
-        }
-
         return DB::transaction(function () use ($request, $to, $remarks, $slipRemark) {
+            $request = ExcuseRequest::whereKey($request->id)->lockForUpdate()->firstOrFail();
+            if (! in_array($to, $this->flows[$request->status] ?? [], true)) {
+                throw ValidationException::withMessages(['status' => 'This status transition is not allowed.']);
+            }
             $from = $request->status;
             $dates = [
                 'submitted' => 'submitted_at',
@@ -44,6 +45,7 @@ class RequestWorkflowService
                 $data['reference_number'] = $request->reference_number ?? $this->referenceNumber($request);
                 $data['reviewed_by'] = auth()->id();
                 $data['slip_remark'] = $slipRemark ?? 'EXCUSED';
+                $data['slip_issuer_name'] = trim(SystemSetting::valueFor('program_head_name', 'PRINCESS LEA ANN D. CALINA, MSIT'));
             }
 
             if (in_array($to, ['approved', 'returned', 'rejected'], true)) {

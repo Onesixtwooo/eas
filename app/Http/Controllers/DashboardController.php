@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 use App\Models\ExcuseRequest;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 class DashboardController extends Controller {
     public function __invoke()
     {
@@ -29,13 +30,14 @@ class DashboardController extends Controller {
         if ($u->role === 'faculty') {
             $recentRequestsQuery->where('status', 'approved');
         }
-        $requests = $recentRequestsQuery->with(['student.user', 'subject', 'facilitator.user'])
-            ->latest()
-            ->take(40)
-            ->get()
-            ->unique('student_id')
-            ->take(8)
-            ->values();
+        $rankedRequests = $recentRequestsQuery->select('excuse_requests.id', 'excuse_requests.created_at')
+            ->selectRaw('ROW_NUMBER() OVER (PARTITION BY excuse_requests.student_id ORDER BY excuse_requests.created_at DESC, excuse_requests.id DESC) as student_rank');
+        $recentIds = DB::query()->fromSub($rankedRequests, 'ranked_requests')
+            ->where('student_rank', 1)->orderByDesc('created_at')->orderByDesc('id')
+            ->limit(8)->pluck('id');
+        $requests = ExcuseRequest::with(['student.user', 'subject', 'facilitator.user'])
+            ->whereIn('id', $recentIds)->get()
+            ->sortBy(fn ($request) => $recentIds->search($request->id))->values();
         $counts = (clone $query)->toBase()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
         $totalRequests = (clone $query)->count();
         $assignedStudents = (clone $query)->distinct()->count('student_id');
@@ -47,38 +49,26 @@ class DashboardController extends Controller {
             'week' => collect(range(5, 0))->map(fn ($weeksAgo) => now()->startOfWeek()->subWeeks($weeksAgo)),
             'month' => collect(range(5, 0))->map(fn ($monthsAgo) => now()->startOfMonth()->subMonths($monthsAgo)),
         ];
-        $analyticsRequests = (clone $query)
-            ->where(function ($request) use ($periods) {
-                $analyticsStart = $periods['month']->first()->copy()->startOfMonth();
-                $request->where('submitted_at', '>=', $analyticsStart)
-                    ->orWhere('approved_at', '>=', $analyticsStart)
-                    ->orWhere('completed_at', '>=', $analyticsStart);
-            })
-            ->get(['student_id', 'absence_date', 'submitted_at', 'approved_at', 'completed_at', 'status', 'slip_remark']);
-        $analyticsByPeriod = collect($periods)->map(function ($buckets, $period) use ($analyticsRequests) {
-            return $buckets->map(function (Carbon $start) use ($analyticsRequests, $period) {
+        $analyticsByPeriod = collect($periods)->map(function ($buckets, $period) use ($query) {
+            return $buckets->map(function (Carbon $start) use ($query, $period) {
                 $end = match ($period) {
                     'day' => $start->copy()->endOfDay(),
                     'week' => $start->copy()->endOfWeek(),
                     default => $start->copy()->endOfMonth(),
                 };
-                $late = $analyticsRequests
-                    ->filter(fn ($request) => $request->submitted_at
-                        && $request->submitted_at->betweenIncluded($start, $end)
-                        && $request->submitted_at->toDateString() > $request->absence_date->toDateString())
-                    ->unique('student_id')->count();
-                $excused = $analyticsRequests
-                    ->filter(fn ($request) => $request->approved_at
-                        && $request->approved_at->betweenIncluded($start, $end)
-                        && $request->slip_remark === 'EXCUSED'
-                        && in_array($request->status, ['approved', 'acknowledged', 'completed'], true))
-                    ->unique('student_id')->count();
-                $confirmed = $analyticsRequests
-                    ->filter(fn ($request) => $request->approved_at && $request->approved_at->betweenIncluded($start, $end))
-                    ->count();
-                $completed = $analyticsRequests
-                    ->filter(fn ($request) => $request->completed_at && $request->completed_at->betweenIncluded($start, $end))
-                    ->count();
+                $bounds = [$start->toDateTimeString(), $end->toDateTimeString()];
+                $metrics = (clone $query)
+                    ->where(fn ($requests) => $requests
+                        ->whereBetween('submitted_at', $bounds)
+                        ->orWhereBetween('approved_at', $bounds)
+                        ->orWhereBetween('completed_at', $bounds))
+                    ->toBase()->selectRaw(
+                        'COUNT(DISTINCT CASE WHEN submitted_at BETWEEN ? AND ? AND DATE(submitted_at) > absence_date THEN student_id END) as late, '
+                        .'COUNT(DISTINCT CASE WHEN approved_at BETWEEN ? AND ? AND slip_remark = ? AND status IN (?, ?, ?) THEN student_id END) as excused, '
+                        .'COUNT(CASE WHEN approved_at BETWEEN ? AND ? THEN 1 END) as confirmed, '
+                        .'COUNT(CASE WHEN completed_at BETWEEN ? AND ? THEN 1 END) as completed',
+                        [...$bounds, ...$bounds, 'EXCUSED', 'approved', 'acknowledged', 'completed', ...$bounds, ...$bounds]
+                    )->first();
 
                 $label = match ($period) {
                     'day' => $start->format('D j'),
@@ -86,7 +76,8 @@ class DashboardController extends Controller {
                     default => $start->format('M'),
                 };
 
-                return ['label' => $label, 'late' => $late, 'excused' => $excused, 'confirmed' => $confirmed, 'completed' => $completed];
+                return ['label' => $label, 'late' => (int) $metrics->late, 'excused' => (int) $metrics->excused,
+                    'confirmed' => (int) $metrics->confirmed, 'completed' => (int) $metrics->completed];
             })->values();
         });
         // Keep the monthly variables available for existing integrations.

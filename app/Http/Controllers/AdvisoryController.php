@@ -44,29 +44,37 @@ class AdvisoryController extends Controller
 
     public function absences(Request $request)
     {
+        $selectedDate = $request->validate([
+            'report_date' => ['nullable', 'date_format:Y-m-d', 'before_or_equal:today'],
+        ])['report_date'] ?? today()->toDateString();
+        $canRespond = $selectedDate === today()->toDateString();
         $yearLevel = $request->user()->adviser_year_level;
         abort_unless($yearLevel, 403, 'No advisory year level has been assigned to this account.');
 
-        $sections = $this->sectionsFor($yearLevel);
+        $sections = $this->sectionsFor($yearLevel, $selectedDate);
         if ($request->filled('section_id')) {
             abort_unless($sections->contains('id', $request->integer('section_id')), 404);
         }
 
+        $visibleReports = fn ($reports) => $reports
+            ->whereDate('report_date', $selectedDate)
+            ->where('reported_year_level', $yearLevel)
+            ->when($request->filled('section_id'), fn ($query) => $query->where('reported_section_id', $request->integer('section_id')))
+            ->where(fn ($query) => $query
+                ->whereIn('attendance_status', ['absent', 'late'])
+                ->orWhereNotNull('adviser_comment')
+                ->orWhereNotNull('adviser_action'));
         $absentStudents = Student::query()
             ->with([
                 'user', 'course', 'section',
-                'dailyAbsenceReports' => fn ($reports) => $reports
-                    ->whereDate('report_date', today())
+                'dailyAbsenceReports' => fn ($reports) => $visibleReports($reports)
                     ->with(['assignment.subject', 'assignment.faculty.user']),
             ])
-            ->where('year_level', $yearLevel)
-            ->when($request->filled('section_id'), fn ($query) => $query->where('section_id', $request->integer('section_id')))
-            ->whereHas('dailyAbsenceReports', fn ($reports) => $reports->whereDate('report_date', today()))
-            ->orderBy('section_id')
+            ->whereHas('dailyAbsenceReports', $visibleReports)
             ->orderBy('student_number')
             ->get();
 
-        return view('advisory.absences', compact('absentStudents', 'sections', 'yearLevel'));
+        return view('advisory.absences', compact('absentStudents', 'sections', 'yearLevel', 'selectedDate', 'canRespond'));
     }
 
     public function comment(Request $request, DailyAbsenceReport $report)
@@ -110,25 +118,34 @@ class AdvisoryController extends Controller
     private function authorizeReport(Request $request, DailyAbsenceReport $report): void
     {
         $yearLevel = $request->user()->adviser_year_level;
-        $report->loadMissing('student');
         abort_unless(
             $yearLevel
-                && $report->student->year_level === $yearLevel
+                && $report->reported_year_level === $yearLevel
                 && $report->report_date->isToday(),
             403
         );
     }
 
-    private function sectionsFor(int $yearLevel)
+    private function sectionsFor(int $yearLevel, ?string $reportDate = null)
     {
         return Section::query()
             ->with('course')
             ->where('year_level', $yearLevel)
-            ->where('is_active', true)
-            ->whereIn('id', Student::query()
-                ->where('year_level', $yearLevel)
-                ->whereNotNull('section_id')
-                ->select('section_id'))
+            ->where(function ($query) use ($yearLevel, $reportDate) {
+                $query->where(fn ($current) => $current
+                    ->where('is_active', true)
+                    ->whereIn('id', Student::query()
+                        ->where('year_level', $yearLevel)
+                        ->whereNotNull('section_id')
+                        ->select('section_id')));
+                if ($reportDate) {
+                    $query->orWhereIn('id', DailyAbsenceReport::query()
+                        ->where('reported_year_level', $yearLevel)
+                        ->whereDate('report_date', $reportDate)
+                        ->whereNotNull('reported_section_id')
+                        ->select('reported_section_id'));
+                }
+            })
             ->orderBy('name')
             ->get();
     }

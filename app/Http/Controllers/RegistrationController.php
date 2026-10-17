@@ -62,6 +62,11 @@ class RegistrationController extends Controller
                     'year_level' => $request->integer('year_level'),
                     'name' => $request->input('block'),
                 ], ['is_active' => true]);
+                if (! $section->is_active) {
+                    throw ValidationException::withMessages([
+                        'block' => 'This section is no longer available. Choose an active section.',
+                    ]);
+                }
                 $name = collect([
                     $request->input('first_name'),
                     $request->input('middle_name'),

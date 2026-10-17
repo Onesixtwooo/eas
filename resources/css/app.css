@@ -56,3 +56,57 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+
+.page-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    background: #f5f7fa;
+    color: #123a63;
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 220ms ease, visibility 220ms ease;
+}
+
+.page-loader.is-hidden {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
+.page-loader-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.7rem;
+    text-align: center;
+    font-size: 0.875rem;
+}
+
+.page-loader-content strong {
+    font-size: 1.2rem;
+    letter-spacing: 0.08em;
+}
+
+.page-loader-content > span:last-child {
+    color: #64748b;
+}
+
+.page-loader-spinner {
+    width: 3rem;
+    height: 3rem;
+    border: 4px solid #cbd5e1;
+    border-top-color: #14532d;
+    border-radius: 50%;
+    animation: page-loader-spin 800ms linear infinite;
+}
+
+@keyframes page-loader-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .page-loader, .page-loader-spinner { transition: none; animation: none; }
+}

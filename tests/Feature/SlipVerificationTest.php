@@ -14,6 +14,7 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class SlipVerificationTest extends TestCase
@@ -82,6 +83,34 @@ class SlipVerificationTest extends TestCase
 
         $response->assertRedirect(route('login'))
             ->assertSessionHas('error');
+    }
+
+    public function test_scanned_slip_shows_existing_files_only_to_authorized_users(): void
+    {
+        Storage::fake('local');
+        $request = $this->createVerifiableRequest('approved', 'OLSHCO-2026-0005');
+        $document = $request->documents()->create([
+            'disk' => 'local', 'path' => 'supporting-documents/private.pdf',
+            'original_name' => 'private.pdf', 'mime_type' => 'application/pdf', 'size' => 7,
+        ]);
+        Storage::disk('local')->put($document->path, 'private');
+
+        $this->get(route('verify', $request->reference_number))
+            ->assertOk()
+            ->assertSee('Supporting documents are attached')
+            ->assertDontSee('private.pdf')
+            ->assertDontSee(route('requests.documents.show', $document));
+        $stranger = User::factory()->create(['role' => 'student', 'is_active' => true]);
+        $this->actingAs($stranger)
+            ->get(route('verify', $request->reference_number))
+            ->assertDontSee('private.pdf')
+            ->assertDontSee('Attach a supporting document');
+        $this->get(route('requests.documents.show', $document))->assertForbidden();
+        $this->actingAs($request->student->user)
+            ->get(route('verify', $request->reference_number))
+            ->assertSee('private.pdf')
+            ->assertSee('verification-document-'.$document->id)
+            ->assertDontSee('Attach a supporting document');
     }
 
     private function createVerifiableRequest(string $status, string $reference): ExcuseRequest
