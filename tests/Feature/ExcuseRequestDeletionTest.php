@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Exceptions\VirusScanException;
 use App\Models\AcademicYear;
 use App\Models\Course;
 use App\Models\ExcuseRequest;
@@ -16,7 +15,6 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Models\SupportingDocument;
 use App\Models\User;
-use App\Services\VirusScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -97,7 +95,7 @@ class ExcuseRequestDeletionTest extends TestCase
             ->assertRedirect(route('requests.index'))
             ->assertSessionHas('error', 'The page or request you were looking for could not be found.');
 
-        $this->actingAs($studentUser)->get('/a-page-that-does-not-exist')
+        $this->actingAs($studentUser)->from('https://outside.example/phishing')->get('/a-page-that-does-not-exist')
             ->assertRedirect(route('requests.index'));
     }
 
@@ -122,29 +120,26 @@ class ExcuseRequestDeletionTest extends TestCase
             ->count());
     }
 
-    public function test_failed_document_scan_does_not_leave_a_draft_and_student_can_retry(): void
+    public function test_invalid_document_does_not_leave_a_draft_and_student_can_retry(): void
     {
         Storage::fake('local');
         [$existing, $studentUser] = $this->makeRequest();
         $existing->update(['status' => 'cancelled']);
-        $this->mock(VirusScanner::class)
-            ->shouldReceive('scan')
-            ->once()
-            ->andThrow(new VirusScanException('Scanner unavailable.'));
-
         $input = [
             'absence_date' => now()->toDateString(),
             'subject_id' => $existing->subject_id,
             'reason_category_id' => $existing->reason_category_id,
-            'explanation' => 'This request should be retried after the scanner is available.',
+            'explanation' => 'This request should be retried with a valid document.',
             'start_time' => '08:00',
             'end_time' => '09:00',
             'declaration' => '1',
             'intent' => 'submit',
         ];
-        $this->actingAs($studentUser)->post(route('requests.store'), $input + [
-            'document' => UploadedFile::fake()->create('proof.pdf', 100, 'application/pdf'),
-        ])->assertSessionHasErrors('document');
+        foreach (['proof.txt' => 'text/plain', 'proof.pdf' => 'application/pdf'] as $name => $mimeType) {
+            $this->actingAs($studentUser)->post(route('requests.store'), $input + [
+                'document' => UploadedFile::fake()->create($name, 100, $mimeType),
+            ])->assertSessionHasErrors('document');
+        }
 
         $this->assertSame(1, ExcuseRequest::where('student_id', $existing->student_id)->count());
         $this->assertDatabaseCount('supporting_documents', 0);
@@ -152,6 +147,31 @@ class ExcuseRequestDeletionTest extends TestCase
         $this->post(route('requests.store'), $input)
             ->assertRedirect()->assertSessionHas('success');
         $this->assertSame(2, ExcuseRequest::where('student_id', $existing->student_id)->count());
+    }
+
+    public function test_supporting_image_is_reencoded_before_it_is_stored(): void
+    {
+        Storage::fake('local');
+        [$existing, $studentUser] = $this->makeRequest();
+        $existing->update(['status' => 'cancelled']);
+        $image = UploadedFile::fake()->image('proof.png', 200, 200);
+        file_put_contents($image->getRealPath(), '<?php echo "unsafe"; ?>', FILE_APPEND);
+
+        $this->actingAs($studentUser)->post(route('requests.store'), [
+            'absence_date' => now()->toDateString(),
+            'subject_id' => $existing->subject_id,
+            'reason_category_id' => $existing->reason_category_id,
+            'explanation' => 'This supporting image should be rewritten before it is stored.',
+            'declaration' => '1',
+            'intent' => 'submit',
+            'document' => $image,
+        ])->assertRedirect()->assertSessionHas('success');
+
+        $document = SupportingDocument::sole();
+        $this->assertSame('image/png', $document->mime_type);
+        $this->assertSame('proof.png', $document->original_name);
+        $this->assertSame(Storage::disk('local')->size($document->path), $document->size);
+        $this->assertStringNotContainsString('<?php', Storage::disk('local')->get($document->path));
     }
 
     public function test_student_can_cancel_a_submitted_request_and_create_a_replacement(): void
@@ -255,7 +275,7 @@ class ExcuseRequestDeletionTest extends TestCase
             'explanation' => 'The complete excuse request has been updated by the student.',
             'start_time' => '08:00',
             'end_time' => '09:30',
-            'document' => UploadedFile::fake()->create('replacement.pdf', 100, 'application/pdf'),
+            'document' => UploadedFile::fake()->image('replacement.png', 200, 200),
         ])->assertSessionHasErrors('document');
         $this->assertSame($original->id, $request->documents()->sole()->id);
     }
@@ -271,10 +291,15 @@ class ExcuseRequestDeletionTest extends TestCase
         $this->actingAs($studentUser)->get(route('requests.show', $request))
             ->assertOk()->assertSee('Replace supporting document');
         $this->patch(route('requests.attachment.update', $request), [
-            'document' => UploadedFile::fake()->create('draft-proof.pdf', 100, 'application/pdf'),
+            'document' => UploadedFile::fake()->create('new-proof.pdf', 100, 'application/pdf'),
+        ])->assertSessionHasErrors('document');
+        $this->assertSame($original->id, $request->documents()->sole()->id);
+        $this->patch(route('requests.attachment.update', $request), [
+            'document' => UploadedFile::fake()->image('draft-proof.png', 200, 200),
         ])->assertRedirect()->assertSessionHas('success');
 
-        $this->assertSame('draft-proof.pdf', $request->documents()->sole()->original_name);
+        $this->assertSame('draft-proof.png', $request->documents()->sole()->original_name);
+        $this->assertSame('image/png', $request->documents()->sole()->mime_type);
         $this->assertDatabaseMissing('supporting_documents', ['id' => $original->id]);
         Storage::disk('local')->assertMissing($original->path);
 
@@ -283,9 +308,9 @@ class ExcuseRequestDeletionTest extends TestCase
             $this->actingAs($studentUser)->get(route('requests.show', $request))
                 ->assertDontSee('Replace supporting document');
             $this->patch(route('requests.attachment.update', $request), [
-                'document' => UploadedFile::fake()->create('blocked.pdf', 100, 'application/pdf'),
+                'document' => UploadedFile::fake()->image('blocked.png', 200, 200),
             ])->assertForbidden();
-            $this->assertSame('draft-proof.pdf', $request->documents()->sole()->original_name);
+            $this->assertSame('draft-proof.png', $request->documents()->sole()->original_name);
         }
     }
 
@@ -308,7 +333,7 @@ class ExcuseRequestDeletionTest extends TestCase
         $this->assertDatabaseCount('request_status_histories', 0);
     }
 
-    public function test_attachment_change_is_rejected_if_review_starts_during_scan(): void
+    public function test_attachment_change_is_rejected_after_review_starts(): void
     {
         Storage::fake('local');
         [$request, $studentUser] = $this->makeRequest();
@@ -318,12 +343,10 @@ class ExcuseRequestDeletionTest extends TestCase
             'disk' => 'local', 'path' => 'supporting-documents/original.pdf',
             'original_name' => 'original.pdf', 'mime_type' => 'application/pdf', 'size' => 8,
         ]);
-        $this->mock(VirusScanner::class)->shouldReceive('scan')->once()->andReturnUsing(function () use ($request) {
-            $request->update(['status' => 'under_review']);
-        });
+        $request->update(['status' => 'under_review']);
 
         $this->actingAs($studentUser)->patch(route('requests.attachment.update', $request), [
-            'document' => UploadedFile::fake()->create('new.pdf', 100, 'application/pdf'),
+            'document' => UploadedFile::fake()->image('new.png', 200, 200),
         ])->assertForbidden();
 
         $this->assertSame($original->id, $request->documents()->sole()->id);

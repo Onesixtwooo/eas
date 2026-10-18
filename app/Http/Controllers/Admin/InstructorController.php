@@ -12,6 +12,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -85,7 +86,7 @@ class InstructorController extends Controller
                 }
                 $user->forceFill(['roles' => array_values(array_unique([...$user->assignedRoles(), 'faculty']))])->save();
             } else {
-                $password = Str::random(12);
+                $password = Str::random(64);
                 $user = (new User([
                     'name' => $faculty->name,
                     'email' => $data['email'],
@@ -102,7 +103,11 @@ class InstructorController extends Controller
             $faculty->save();
 
             if (! $existingUser) {
-                Mail::to($user->email)->send(new AdministratorAccountCreated($user, $password));
+                $token = Password::broker()->createToken($user);
+                Mail::to($user->email)->send(new AdministratorAccountCreated(
+                    $user,
+                    route('password.reset', ['token' => $token, 'email' => $user->email]),
+                ));
             }
 
             return ! $existingUser;
@@ -111,7 +116,7 @@ class InstructorController extends Controller
         return redirect()->route('admin.faculty.index')->with(
             'success',
             $created
-                ? 'Faculty account created and login details emailed.'
+                ? 'Faculty account created and password setup link emailed.'
                 : 'The existing account is now connected and has Admin/Instructor access.'
         );
     }

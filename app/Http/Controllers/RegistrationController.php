@@ -7,15 +7,12 @@ use App\Models\Student;
 use App\Models\User;
 use App\Models\Course;
 use App\Models\Subject;
-use App\Exceptions\VirusScanException;
 use App\Mail\StudentRegistrationOtp;
-use App\Services\VirusScanner;
+use App\Services\SanitizedImageStorage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -33,26 +30,10 @@ class RegistrationController extends Controller
         return view('auth.register', compact('sections', 'subjects'));
     }
 
-    public function store(RegisterStudentRequest $request, VirusScanner $virusScanner)
+    public function store(RegisterStudentRequest $request, SanitizedImageStorage $images)
     {
         $assessmentForm = $request->file('assessment_form');
-
-        try {
-            $virusScanner->scan($assessmentForm->getRealPath());
-        } catch (VirusScanException $exception) {
-            Log::warning('Assessment form antivirus scan rejected an upload.', [
-                'infected' => $exception->infected,
-                'error' => $exception->getMessage(),
-            ]);
-
-            throw ValidationException::withMessages([
-                'assessment_form' => $exception->infected
-                    ? 'The assessment form was rejected because malware was detected.'
-                    : 'The assessment form could not be safely scanned. Please try again later.',
-            ]);
-        }
-
-        $assessmentPath = $this->storeSanitizedAssessmentForm($assessmentForm);
+        $assessmentPath = $images->store($assessmentForm, 'student-assessment-forms', 'assessment_form');
 
         try {
             $user = DB::transaction(function () use ($request, $assessmentForm, $assessmentPath) {
@@ -137,37 +118,4 @@ class RegistrationController extends Controller
         return response()->json(['message' => 'A six-digit OTP was sent to your email.']);
     }
 
-    private function storeSanitizedAssessmentForm($file): string
-    {
-        $source = file_get_contents($file->getRealPath());
-        $image = $source === false ? false : @imagecreatefromstring($source);
-
-        if ($image === false) {
-            throw ValidationException::withMessages([
-                'assessment_form' => 'The assessment form could not be processed as a safe image.',
-            ]);
-        }
-
-        $isPng = exif_imagetype($file->getRealPath()) === IMAGETYPE_PNG;
-        ob_start();
-        $encoded = $isPng ? imagepng($image, null, 8) : imagejpeg($image, null, 90);
-        $sanitized = ob_get_clean();
-        imagedestroy($image);
-
-        if (! $encoded || $sanitized === false) {
-            throw ValidationException::withMessages([
-                'assessment_form' => 'The assessment form could not be processed as a safe image.',
-            ]);
-        }
-
-        $path = 'student-assessment-forms/'.Str::uuid().($isPng ? '.png' : '.jpg');
-
-        if (! Storage::disk('local')->put($path, $sanitized)) {
-            throw ValidationException::withMessages([
-                'assessment_form' => 'The assessment form could not be stored. Please try again.',
-            ]);
-        }
-
-        return $path;
-    }
 }

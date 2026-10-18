@@ -93,6 +93,8 @@ class ExcuseRequestArchiveService
             'excuse_request_subject' => $rows('excuse_request_subject'),
             'supporting_documents' => $rows('supporting_documents'),
             'request_status_histories' => $rows('request_status_histories'),
+            'slip_issuance' => (array) DB::table('slip_issuances')->where('excuse_request_id', $request->id)->first(),
+            'slip_amendments' => $rows('slip_amendments'),
             'program_head_reviews' => $rows('program_head_reviews'),
             'instructor_acknowledgments' => $rows('instructor_acknowledgments'),
         ];

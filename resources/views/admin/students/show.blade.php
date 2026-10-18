@@ -156,7 +156,7 @@
                 <tr><th class="px-5 py-3">Reference</th><th class="px-5 py-3">Absence date</th><th class="px-5 py-3">Classes</th><th class="px-5 py-3">Status</th><th class="px-5 py-3"><span class="sr-only">Action</span></th></tr>
             </thead>
             <tbody class="divide-y divide-slate-200">
-                @forelse($student->requests as $item)
+                @forelse($requests as $item)
                     @php($historySubjects = $item->subjects->isNotEmpty() ? $item->subjects : collect([$item->subject]))
                     <tr class="hover:bg-slate-50">
                         <td class="px-5 py-4 font-semibold text-[#123A63]">{{ $item->reference_number ?? 'Awaiting reference' }}<span class="mt-1 block text-xs font-normal text-slate-500">Submitted {{ $item->submitted_at?->format('M d, Y') ?? '—' }}</span></td>
@@ -171,5 +171,6 @@
             </tbody>
         </table>
     </div>
+    <div class="px-6 py-4">{{ $requests->links() }}</div>
 </section>
 @endsection

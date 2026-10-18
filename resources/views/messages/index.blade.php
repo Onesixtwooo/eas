@@ -189,6 +189,7 @@
         moreWaiting = false;
         try {
             const response = await fetch(`${pollUrl}?after=${lastId}&since=${encodeURIComponent(lastSync)}&changed_after=${changedAfter}`, {headers: {'Accept': 'application/json'}, cache: 'no-store'});
+            if (response.status === 401) return window.handleSessionExpiry(response);
             if (response.ok) { const data = await response.json(); data.messages.forEach(message => {
                 if (Number(message.id) > lastId || thread.querySelector(`[data-message-id="${message.id}"]`)) renderMessage(message);
             });
@@ -236,7 +237,8 @@
         }
     });
     thread.scrollTop = thread.scrollHeight;
-    setInterval(poll, 3000);
+    setInterval(poll, 10000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 })();
 </script>
 @endif

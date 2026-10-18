@@ -82,6 +82,18 @@ class AdminUserAccountTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_disabled_account_receives_unauthorized_json_for_background_polls(): void
+    {
+        $user = User::factory()->create(['role' => 'admin', 'is_active' => false]);
+
+        $this->actingAs($user)->getJson(route('realtime.version'))
+            ->assertUnauthorized()
+            ->assertJsonPath('message', 'Your account is disabled. Please contact the IT office.')
+            ->assertJsonPath('reason', 'account_disabled');
+        $this->assertGuest();
+        $this->get(route('login', ['disabled' => 1]))->assertSee('Your account is disabled.');
+    }
+
     public function test_admin_can_edit_an_account(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
@@ -209,8 +221,9 @@ class AdminUserAccountTest extends TestCase
         $administrator = User::where('email', 'second.admin@example.com')->firstOrFail();
         Mail::assertSent(AdministratorAccountCreated::class, function ($mail) use ($administrator) {
             return $mail->hasTo($administrator->email)
-                && strlen($mail->temporaryPassword) === 12
-                && Hash::check($mail->temporaryPassword, $administrator->password);
+                && str_contains($mail->setupUrl, '/reset-password/')
+                && str_contains($mail->setupUrl, urlencode($administrator->email))
+                && ! str_contains($mail->render(), 'Temporary password:');
         });
     }
 
@@ -232,8 +245,8 @@ class AdminUserAccountTest extends TestCase
         $this->assertTrue($account->is_active);
         Mail::assertSent(AdministratorAccountCreated::class, fn ($mail) =>
             $mail->hasTo('head@example.com')
-                && strlen($mail->temporaryPassword) === 12
-                && Hash::check($mail->temporaryPassword, $account->password)
+                && str_contains($mail->setupUrl, '/reset-password/')
+                && ! str_contains($mail->render(), 'Temporary password:')
         );
     }
 
@@ -246,7 +259,7 @@ class AdminUserAccountTest extends TestCase
             ->assertOk()
             ->assertDontSee('name="password"', false)
             ->assertDontSee('name="password_confirmation"', false)
-            ->assertSee('generated password will be emailed');
+            ->assertSee('password setup link will be emailed');
     }
 
     public function test_admin_can_delete_an_account_but_not_their_own(): void

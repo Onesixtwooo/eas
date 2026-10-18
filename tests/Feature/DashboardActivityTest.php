@@ -13,6 +13,7 @@ use App\Models\Student;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class DashboardActivityTest extends TestCase
@@ -48,6 +49,11 @@ class DashboardActivityTest extends TestCase
                 'created_at' => now()->subMinutes($i)]);
         }
 
+        $analyticsQueries = 0;
+        DB::listen(function ($query) use (&$analyticsQueries) {
+            if (str_contains($query->sql, 'day_0_late')) $analyticsQueries++;
+        });
+
         $this->actingAs($admin)->get(route('dashboard'))->assertOk()
             ->assertViewHas('requests', fn ($requests) => $requests->count() === 2
                 && $requests->pluck('student_id')->sort()->values()->all() === $students->pluck('id')->sort()->values()->all())
@@ -57,5 +63,43 @@ class DashboardActivityTest extends TestCase
                 return $today['late'] === 2 && $today['excused'] === 2
                     && $today['confirmed'] === 46 && $today['completed'] === 0;
             });
+        $this->assertSame(1, $analyticsQueries);
+    }
+
+    public function test_excused_counts_follow_the_latest_slip_amendment(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'Information Technology']);
+        $section = Section::create(['course_id' => $course->id, 'name' => 'A', 'year_level' => 1]);
+        $faculty = Faculty::create(['name' => 'Instructor']);
+        $subject = Subject::create(['code' => 'IT101', 'name' => 'Programming', 'course_id' => $course->id]);
+        $year = AcademicYear::create(['name' => '2026-2027']);
+        $semester = Semester::create(['name' => 'First']);
+        $reason = ReasonCategory::create(['name' => 'Illness']);
+        $base = [
+            'subject_id' => $subject->id, 'facilitator_id' => $faculty->id,
+            'academic_year_id' => $year->id, 'semester_id' => $semester->id,
+            'absence_date' => today()->subDay(), 'reason_category_id' => $reason->id,
+            'explanation' => 'Illness', 'status' => 'approved',
+            'submitted_at' => now(), 'approved_at' => now(),
+        ];
+        $student = Student::create([
+            'user_id' => User::factory()->create(['role' => 'student'])->id,
+            'student_number' => '2026-1', 'course_id' => $course->id,
+            'section_id' => $section->id, 'year_level' => 1,
+        ]);
+        $request = ExcuseRequest::create($base + [
+            'student_id' => $student->id, 'slip_remark' => 'EXCUSED',
+        ]);
+        $request->slipAmendments()->create(['slip_remark' => 'CONDITIONAL', 'remarks' => 'Revised result.']);
+
+        $this->actingAs($admin)->get(route('dashboard'))->assertOk()
+            ->assertViewHas('excusedStudents', 0)
+            ->assertViewHas('analyticsByPeriod', fn ($periods) => $periods['day']->last()['excused'] === 0);
+
+        $request->slipAmendments()->create(['slip_remark' => 'EXCUSED', 'remarks' => 'Final result.']);
+        $this->get(route('dashboard'))->assertOk()
+            ->assertViewHas('excusedStudents', 1)
+            ->assertViewHas('analyticsByPeriod', fn ($periods) => $periods['day']->last()['excused'] === 1);
     }
 }

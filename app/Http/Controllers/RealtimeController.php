@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Middleware\TrackSystemChanges;
 use App\Models\Student;
+use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Cache;
 
@@ -16,10 +17,14 @@ class RealtimeController extends Controller
         ]);
     }
 
-    public function presence(): JsonResponse
+    public function presence(Request $request): JsonResponse
     {
         abort_unless(in_array(auth()->user()->role, ['admin', 'program_head'], true), 403);
-        $online = Student::pluck('user_id')->filter(fn ($userId) =>
+        $ids = $request->validate([
+            'user_ids' => ['required', 'array', 'max:50'],
+            'user_ids.*' => ['required', 'integer', 'distinct', 'min:1'],
+        ])['user_ids'];
+        $online = Student::whereIn('user_id', $ids)->pluck('user_id')->filter(fn ($userId) =>
             Cache::has(TrackSystemChanges::PRESENCE_PREFIX.$userId)
         )->values();
 

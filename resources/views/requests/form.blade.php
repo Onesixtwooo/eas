@@ -19,7 +19,7 @@
         <section class="rounded-2xl border bg-white p-6 shadow-sm">
             <h2 class="border-b pb-4 text-lg font-bold text-[#123A63]">Supporting Information</h2>
             <div class="mt-5 grid gap-5 md:grid-cols-2">
-                <div class="md:col-span-2"><label>Supporting document</label><input type="file" name="document" accept=".pdf,.jpg,.jpeg,.png"><p class="mt-1 text-xs text-slate-400">PDF, JPG, JPEG, or PNG. Maximum 5 MB.</p></div>
+                <div class="md:col-span-2"><label>Supporting document</label><input type="file" name="document" accept="image/jpeg,image/png"><p class="mt-1 text-xs text-slate-400">JPG or PNG only. Maximum 5 MB, 4000 pixels per side, and 8 megapixels total.</p></div>
                 <div><label>Parent/guardian name</label><input name="guardian_name" value="{{ old('guardian_name') }}"></div>
                 <div><label>Contact number</label><input name="guardian_contact" value="{{ old('guardian_contact') }}"></div>
             </div>

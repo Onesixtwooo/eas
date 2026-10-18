@@ -22,25 +22,43 @@
             @php
                 $subjects = $item->subjects->isNotEmpty() ? $item->subjects : collect([$item->subject]);
                 $facilitators = $item->facilitators->isNotEmpty() ? $item->facilitators : collect([$item->facilitator]);
+                $issued = $item->slipIssuance?->snapshot;
+                $reconstructed = ($issued['snapshot_source'] ?? null) !== 'captured';
+                $valid = in_array($item->status, ['approved', 'acknowledged', 'completed'], true);
+                $latestAmendment = $item->slipAmendments->first();
             @endphp
 
-            <div class="mb-6 flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
-                <span class="grid size-7 shrink-0 place-items-center rounded-full bg-emerald-600 text-sm font-bold text-white">✓</span>
+            <div class="mb-6 flex items-center gap-3 rounded-xl border p-4 {{ $valid && ! $latestAmendment ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-300 bg-amber-50 text-amber-900' }}">
+                <span class="grid size-7 shrink-0 place-items-center rounded-full text-sm font-bold text-white {{ $valid && ! $latestAmendment ? 'bg-emerald-600' : 'bg-amber-700' }}">✓</span>
                 <div>
-                    <b class="block text-sm">VALID OFFICIAL SLIP</b>
-                    <span class="text-xs text-emerald-700">Verified by the BSIT Department College Portal</span>
+                    <b class="block text-sm">{{ ! $valid ? 'REVOKED OFFICIAL SLIP' : ($latestAmendment ? 'AMENDED OFFICIAL SLIP' : 'VALID OFFICIAL SLIP') }}</b>
+                    <span class="text-xs">{{ ! $valid ? 'This slip is no longer valid.' : ($latestAmendment ? 'Check the current official result below.' : 'Verified by the BSIT Department College Portal') }}</span>
                 </div>
             </div>
+
+            @if($reconstructed)
+                <p class="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">Historical slip details were reconstructed from records available when history tracking began. They may differ from the original printed slip.</p>
+            @endif
+
+            @if($latestAmendment)
+                <div class="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">
+                    <b class="block">Latest official amendment: {{ $latestAmendment->slip_remark }}</b>
+                    <span class="mt-1 block">{{ $latestAmendment->remarks }}</span>
+                    <span class="mt-1 block text-xs">Recorded {{ $latestAmendment->created_at->format('F d, Y g:i A') }}</span>
+                </div>
+            @endif
 
             <dl class="grid gap-5 sm:grid-cols-2">
                 @foreach([
                     ['Reference number', $item->reference_number],
-                    ['Student name', $item->student->user->name],
-                    ['Date of absence', $item->absence_date->format('F d, Y')],
-                    ['Subjects', $subjects->pluck('code')->join(', ')],
-                    ['Course facilitators', $facilitators->pluck('user.name')->filter()->unique()->join(', ')],
+                    ['Student name', $issued['student_name'] ?? $item->student->user->name],
+                    ['Date of absence', $issued ? \Illuminate\Support\Carbon::parse($issued['absence_date'])->format('F d, Y') : $item->absence_date->format('F d, Y')],
+                    ['Subjects', $issued ? implode(', ', $issued['subject_codes']) : $subjects->pluck('code')->join(', ')],
+                    ['Course facilitators', $issued ? implode(', ', $issued['facilitator_names']) : $facilitators->pluck('user.name')->filter()->unique()->join(', ')],
                     ['Current status', ucwords(str_replace('_', ' ', $item->status))],
-                    ['Date issued', $item->approved_at?->format('F d, Y') ?? '—'],
+                    [$reconstructed ? 'Recorded initial result' : 'Original issued result', $issued['slip_remark'] ?? $item->slip_remark],
+                    ['Current official result', $valid ? ($latestAmendment?->slip_remark ?? $issued['slip_remark'] ?? $item->slip_remark) : 'REVOKED'],
+                    ['Date issued', $issued && $issued['issued_at'] ? \Illuminate\Support\Carbon::parse($issued['issued_at'])->format('F d, Y') : ($item->approved_at?->format('F d, Y') ?? '—')],
                     ['Issued by', 'BSIT Program Head']
                 ] as [$k, $v])
                     <div>

@@ -16,6 +16,13 @@ class EnsureAccountIsActive
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'message' => 'Your account is disabled. Please contact the IT office.',
+                    'reason' => 'account_disabled',
+                ], 401);
+            }
+
             return redirect()->route('login')->withErrors([
                 'email' => 'Your account is disabled, please report to the IT office.',
             ]);

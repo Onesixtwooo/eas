@@ -2,14 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Exceptions\VirusScanException;
 use App\Mail\StudentRegistrationOtp;
 use App\Models\Course;
 use App\Models\Section;
 use App\Models\Student;
 use App\Models\Subject;
 use App\Models\User;
-use App\Services\VirusScanner;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Mail;
@@ -97,17 +95,40 @@ class StudentRegistrationFlowTest extends TestCase
         Storage::disk('local')->assertDirectoryEmpty('student-assessment-forms');
     }
 
-    public function test_registration_rejects_an_antivirus_failure_without_creating_an_account(): void
+    public function test_registration_rejects_an_image_containing_php_without_creating_an_account(): void
     {
         Storage::fake('local');
-        $this->mock(VirusScanner::class)->shouldReceive('scan')->once()
-            ->andThrow(new VirusScanException('Scanner rejected the file.', true));
+        $image = UploadedFile::fake()->image('assessment.png', 200, 200);
+        file_put_contents($image->getRealPath(), '<?php echo "unsafe"; ?>', FILE_APPEND);
         $this->withSession($this->otpSession())->post(route('register.store'), $this->registrationData([
-            'assessment_form' => UploadedFile::fake()->image('assessment.png', 200, 200),
+            'assessment_form' => $image,
         ]))->assertSessionHasErrors('assessment_form');
 
         $this->assertDatabaseCount('students', 0);
         Storage::disk('local')->assertDirectoryEmpty('student-assessment-forms');
+    }
+
+    public function test_registration_rejects_images_over_the_resolution_limit(): void
+    {
+        Storage::fake('local');
+
+        foreach ([[4001, 100], [4000, 2001]] as [$width, $height]) {
+            $this->withSession($this->otpSession())->post(route('register.store'), $this->registrationData([
+                'assessment_form' => UploadedFile::fake()->image('assessment.png', $width, $height),
+            ]))->assertSessionHasErrors('assessment_form');
+        }
+
+        $this->assertDatabaseCount('students', 0);
+        Storage::disk('local')->assertDirectoryEmpty('student-assessment-forms');
+    }
+
+    public function test_registration_rejects_non_file_assessment_input_without_a_server_error(): void
+    {
+        $this->withSession($this->otpSession())->post(route('register.store'), $this->registrationData([
+            'assessment_form' => 'not-an-upload',
+        ]))->assertSessionHasErrors('assessment_form');
+
+        $this->assertDatabaseCount('students', 0);
     }
 
     private function registrationData(array $overrides = []): array

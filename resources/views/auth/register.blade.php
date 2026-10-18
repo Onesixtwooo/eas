@@ -61,7 +61,7 @@
                     <label for="assessment_form">Assessment form <span class="text-red-600">*</span></label>
                     <p class="mt-1 text-sm text-slate-500">Upload a clear photo or scan of your official assessment form so the school can verify your enrollment.</p>
                     <input id="assessment_form" type="file" name="assessment_form" accept="image/jpeg,image/png" required class="mt-3 bg-white">
-                    <p class="mt-2 text-xs text-slate-400">Accepted formats: JPG or PNG. Maximum file size: 5 MB.</p>
+                    <p class="mt-2 text-xs text-slate-400">JPG or PNG. Maximum 5 MB, 4000 pixels per side, and 8 megapixels total.</p>
                 </div>
                 <div><label for="year_level">Year level <span class="text-red-600">*</span></label><select id="year_level" name="year_level" required><option value="">Select year level</option>@foreach(range(1, 5) as $year)<option value="{{ $year }}" @selected(old('year_level') == $year)>{{ $year }}{{ $year === 1 ? 'st' : ($year === 2 ? 'nd' : ($year === 3 ? 'rd' : 'th')) }} Year</option>@endforeach</select></div>
                 <div><label for="block">Block <span class="text-red-600">*</span></label><select id="block" name="block" required><option value="">Select block</option>@foreach(range('A', 'G') as $block)<option value="{{ $block }}" @selected(old('block') === $block)>Block {{ $block }}</option>@endforeach</select></div>

@@ -342,20 +342,24 @@ class MessageController extends Controller
                         ->where('request_subject.facilitator_id', $facultyId)))));
     }
 
-    private function confirmedRequests(Student $student)
-    {
-        return ExcuseRequest::where('student_id', $student->id)
-            ->whereIn('status', ['approved', 'acknowledged', 'completed']);
-    }
-
     private function availableRecipients(Student $student)
     {
-        $instructors = $this->confirmedRequests($student)
-            ->with(['facilitator.user', 'facilitators.user'])
+        $statuses = ['approved', 'acknowledged', 'completed'];
+        $primary = DB::table('excuse_requests')
+            ->select('facilitator_id')
+            ->where('student_id', $student->id)
+            ->whereIn('status', $statuses);
+        $covered = DB::table('excuse_request_subject')
+            ->join('excuse_requests', 'excuse_requests.id', '=', 'excuse_request_subject.excuse_request_id')
+            ->select('excuse_request_subject.facilitator_id')
+            ->where('excuse_requests.student_id', $student->id)
+            ->whereIn('excuse_requests.status', $statuses);
+        $facultyIds = $primary->union($covered);
+        $instructors = User::with('faculty')
+            ->where('role', 'faculty')->where('is_active', true)
+            ->whereHas('faculty', fn ($query) => $query->whereIn('id', $facultyIds))
             ->get()
-            ->flatMap(fn ($request) => $request->facilitators->pluck('user')->push($request->facilitator?->user))
-            ->filter(fn ($user) => $user?->exists && $this->canMessageInstructor($user, $student))
-            ->unique('id')->values();
+            ->filter(fn ($user) => $this->canMessageInstructor($user, $student));
         return User::whereIn('role', ['admin', 'program_head'])->where('is_active', true)->orderBy('name')->get()
             ->merge($instructors)->unique('id')->values();
     }

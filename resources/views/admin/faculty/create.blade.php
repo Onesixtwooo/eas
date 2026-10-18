@@ -23,7 +23,7 @@
             <div class="sm:col-span-2"><label for="designation">Designation *</label><input id="designation" name="designation" value="{{ old('designation', 'Course Facilitator') }}" :required="!existing">@error('designation')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
         </div>
         <div><label for="email">Faculty email address *</label><input id="email" type="email" name="email" value="{{ old('email') }}" required>@error('email')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
-        <div class="rounded-xl bg-blue-50 p-4 text-sm text-blue-800"><b>Already an admin?</b> Enter the same admin email. The selected instructor will be connected to that account and Faculty access will be added—no duplicate account or new password. For a new email, a temporary password will be sent.</div>
+        <div class="rounded-xl bg-blue-50 p-4 text-sm text-blue-800"><b>Already an admin?</b> Enter the same admin email. The selected instructor will be connected to that account and Faculty access will be added—no duplicate account or new password. For a new email, a password setup link will be sent.</div>
         <div class="flex justify-end gap-3 border-t pt-5"><a href="{{ route('admin.faculty.index') }}" class="rounded-xl border px-5 py-3 font-semibold">Cancel</a><button class="rounded-xl bg-[#123A63] px-5 py-3 font-semibold text-white">Connect or Create Account</button></div>
     </form>
 </div>

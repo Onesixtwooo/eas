@@ -135,6 +135,8 @@ class AccountArchiveService
             'excuse_request_subject' => $this->rows('excuse_request_subject', fn ($query) => $query->whereIn('excuse_request_id', $requestIds)),
             'supporting_documents' => $this->rows('supporting_documents', fn ($query) => $query->whereIn('excuse_request_id', $requestIds)),
             'request_status_histories' => $this->rows('request_status_histories', fn ($query) => $query->whereIn('excuse_request_id', $requestIds)->orWhere('action_by', $user->id)),
+            'slip_issuances' => $this->rows('slip_issuances', fn ($query) => $query->whereIn('excuse_request_id', $requestIds)),
+            'slip_amendments' => $this->rows('slip_amendments', fn ($query) => $query->whereIn('excuse_request_id', $requestIds)->orWhere('action_by', $user->id)),
             'program_head_reviews' => $this->rows('program_head_reviews', fn ($query) => $query->whereIn('excuse_request_id', $requestIds)->orWhere('reviewer_id', $user->id)),
             'instructor_acknowledgments' => $this->rows('instructor_acknowledgments', function ($query) use ($requestIds, $facultyId) {
                 $query->whereIn('excuse_request_id', $requestIds);
@@ -281,6 +283,8 @@ class AccountArchiveService
                 'excuse_request_subject' => $related('excuse_request_subject'),
                 'supporting_documents' => $documents,
                 'request_status_histories' => $related('request_status_histories'),
+                'slip_issuance' => $related('slip_issuances')[0] ?? null,
+                'slip_amendments' => $related('slip_amendments'),
                 'program_head_reviews' => $related('program_head_reviews'),
                 'instructor_acknowledgments' => $related('instructor_acknowledgments'),
             ];

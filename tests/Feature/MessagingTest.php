@@ -114,6 +114,38 @@ class MessagingTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_student_recipient_list_includes_each_instructor_on_a_multi_subject_slip(): void
+    {
+        $student = $this->createStudent('multi@example.com', '2026-1100');
+        $firstUser = User::factory()->create(['name' => 'First Instructor', 'role' => 'faculty', 'is_active' => true]);
+        $secondUser = User::factory()->create(['name' => 'Second Instructor', 'role' => 'faculty', 'is_active' => true]);
+        $first = Faculty::create(['user_id' => $firstUser->id, 'name' => $firstUser->name]);
+        $second = Faculty::create(['user_id' => $secondUser->id, 'name' => $secondUser->name]);
+        $firstSubject = Subject::create(['code' => 'MULTI1', 'name' => 'First Subject', 'course_id' => $student->course_id]);
+        $secondSubject = Subject::create(['code' => 'MULTI2', 'name' => 'Second Subject', 'course_id' => $student->course_id]);
+        foreach ([[$first, $firstSubject], [$second, $secondSubject]] as [$faculty, $subject]) {
+            InstructorAssignment::create([
+                'faculty_id' => $faculty->id, 'course_id' => $student->course_id,
+                'subject_id' => $subject->id, 'year_level' => 1, 'section_id' => $student->section_id,
+                'is_active' => true,
+            ]);
+        }
+        $request = ExcuseRequest::create([
+            'student_id' => $student->id, 'subject_id' => $firstSubject->id, 'facilitator_id' => $first->id,
+            'academic_year_id' => AcademicYear::create(['name' => '2026-2027'])->id,
+            'semester_id' => Semester::create(['name' => 'First'])->id,
+            'reason_category_id' => ReasonCategory::create(['name' => 'Illness'])->id,
+            'absence_date' => today(), 'explanation' => 'Unable to attend either subject.', 'status' => 'approved',
+        ]);
+        $request->subjects()->attach([
+            $firstSubject->id => ['facilitator_id' => $first->id],
+            $secondSubject->id => ['facilitator_id' => $second->id],
+        ]);
+
+        $this->actingAs($student->user)->get(route('messages.index'))
+            ->assertOk()->assertSee('First Instructor')->assertSee('Second Instructor');
+    }
+
     public function test_instructor_recipient_search_filters_before_paginating(): void
     {
         $first = $this->createStudent('first@example.com', '2026-9000');

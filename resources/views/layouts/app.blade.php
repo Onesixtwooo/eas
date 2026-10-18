@@ -109,41 +109,54 @@
 
         (() => {
             let revision = @json(cache(\App\Http\Middleware\TrackSystemChanges::CACHE_KEY, 'initial'));
-            let formIsDirty = false;
+            let userActivitySequence = 0;
+            let reportedActivitySequence = 0;
+            let checkingForUpdates = false;
             const updateNotice = document.getElementById('realtime-update');
+            const expiredLoginUrl = @json(route('login', ['expired' => 1]));
+            const disabledLoginUrl = @json(route('login', ['disabled' => 1]));
 
-            document.addEventListener('input', event => {
-                if (event.target.closest('form')) formIsDirty = true;
-            });
-            document.addEventListener('change', event => {
-                if (event.target.closest('form')) formIsDirty = true;
-            });
+            window.handleSessionExpiry = async response => {
+                const reason = (await response.json().catch(() => ({}))).reason;
+                location.assign(reason === 'account_disabled' ? disabledLoginUrl : expiredLoginUrl);
+            };
+
+            for (const eventName of ['pointerdown', 'keydown', 'wheel', 'input']) {
+                document.addEventListener(eventName, event => {
+                    if (event.isTrusted) userActivitySequence++;
+                }, {passive: true});
+            }
 
             async function checkForUpdates() {
-                if (document.hidden) return;
+                if (document.hidden || checkingForUpdates) return;
+                checkingForUpdates = true;
+                const activitySequence = userActivitySequence;
+                const reportedActivity = activitySequence > reportedActivitySequence;
 
                 try {
                     const response = await fetch(@json(route('realtime.version')), {
-                        headers: {'Accept': 'application/json'},
+                        headers: {'Accept': 'application/json', ...(reportedActivity ? {'X-User-Activity': '1'} : {})},
                         cache: 'no-store',
                     });
+                    if (response.status === 401) {
+                        await window.handleSessionExpiry(response);
+                        return;
+                    }
                     if (!response.ok) return;
+                    if (reportedActivity) reportedActivitySequence = activitySequence;
 
                     const current = (await response.json()).revision;
                     if (current === revision) return;
                     revision = current;
-
-                    if (formIsDirty) {
-                        updateNotice.classList.remove('hidden');
-                    } else {
-                        location.reload();
-                    }
+                    updateNotice.classList.remove('hidden');
                 } catch (error) {
                     // A temporary connection failure is retried on the next interval.
+                } finally {
+                    checkingForUpdates = false;
                 }
             }
 
-            setInterval(checkForUpdates, 5000);
+            setInterval(checkForUpdates, 30000);
             document.addEventListener('visibilitychange', () => {
                 if (!document.hidden) checkForUpdates();
             });

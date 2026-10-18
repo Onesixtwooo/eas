@@ -112,18 +112,17 @@ class StudentController extends Controller
 
     public function show(Student $student)
     {
-        $student->load([
-            'user', 'course', 'section', 'subjects',
-            'requests' => fn ($query) => $query->with(['subject', 'subjects'])->latest(),
-        ]);
+        $student->load(['user', 'course', 'section', 'subjects']);
         $student->loadCount('requests');
+        $requests = $student->requests()->with(['subject', 'subjects'])
+            ->latest()->orderByDesc('id')->paginate(15, ['*'], 'request_page');
         $sections = Section::where('course_id', $student->course_id)
             ->where('is_active', true)
             ->orderBy('year_level')
             ->orderBy('name')
             ->get();
 
-        return view('admin.students.show', compact('student', 'sections'));
+        return view('admin.students.show', compact('student', 'sections', 'requests'));
     }
 
     public function updateAcademicPlacement(Request $request, Student $student)

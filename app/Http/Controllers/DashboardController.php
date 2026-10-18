@@ -41,7 +41,8 @@ class DashboardController extends Controller {
         $counts = (clone $query)->toBase()->selectRaw('status, count(*) as total')->groupBy('status')->pluck('total', 'status');
         $totalRequests = (clone $query)->count();
         $assignedStudents = (clone $query)->distinct()->count('student_id');
-        $excusedStudents = (clone $query)->where('slip_remark', 'EXCUSED')->whereIn('status', ['approved', 'acknowledged', 'completed'])->distinct()->count('student_id');
+        $currentSlipRemark = 'COALESCE((SELECT slip_amendments.slip_remark FROM slip_amendments WHERE slip_amendments.excuse_request_id = excuse_requests.id ORDER BY slip_amendments.id DESC LIMIT 1), excuse_requests.slip_remark)';
+        $excusedStudents = (clone $query)->whereRaw($currentSlipRemark.' = ?', ['EXCUSED'])->whereIn('status', ['approved', 'acknowledged', 'completed'])->distinct()->count('student_id');
         $lateStudents = (clone $query)->whereNotNull('submitted_at')->whereRaw('DATE(submitted_at) > absence_date')->distinct()->count('student_id');
 
         $periods = [
@@ -49,37 +50,50 @@ class DashboardController extends Controller {
             'week' => collect(range(5, 0))->map(fn ($weeksAgo) => now()->startOfWeek()->subWeeks($weeksAgo)),
             'month' => collect(range(5, 0))->map(fn ($monthsAgo) => now()->startOfMonth()->subMonths($monthsAgo)),
         ];
-        $analyticsByPeriod = collect($periods)->map(function ($buckets, $period) use ($query) {
-            return $buckets->map(function (Carbon $start) use ($query, $period) {
+        $expressions = [];
+        $bindings = [];
+        $rangeStart = null;
+        $rangeEnd = null;
+        foreach ($periods as $period => $buckets) {
+            foreach ($buckets as $index => $start) {
                 $end = match ($period) {
                     'day' => $start->copy()->endOfDay(),
                     'week' => $start->copy()->endOfWeek(),
                     default => $start->copy()->endOfMonth(),
                 };
                 $bounds = [$start->toDateTimeString(), $end->toDateTimeString()];
-                $metrics = (clone $query)
-                    ->where(fn ($requests) => $requests
-                        ->whereBetween('submitted_at', $bounds)
-                        ->orWhereBetween('approved_at', $bounds)
-                        ->orWhereBetween('completed_at', $bounds))
-                    ->toBase()->selectRaw(
-                        'COUNT(DISTINCT CASE WHEN submitted_at BETWEEN ? AND ? AND DATE(submitted_at) > absence_date THEN student_id END) as late, '
-                        .'COUNT(DISTINCT CASE WHEN approved_at BETWEEN ? AND ? AND slip_remark = ? AND status IN (?, ?, ?) THEN student_id END) as excused, '
-                        .'COUNT(CASE WHEN approved_at BETWEEN ? AND ? THEN 1 END) as confirmed, '
-                        .'COUNT(CASE WHEN completed_at BETWEEN ? AND ? THEN 1 END) as completed',
-                        [...$bounds, ...$bounds, 'EXCUSED', 'approved', 'acknowledged', 'completed', ...$bounds, ...$bounds]
-                    )->first();
-
+                $rangeStart = min($rangeStart ?? $bounds[0], $bounds[0]);
+                $rangeEnd = max($rangeEnd ?? $bounds[1], $bounds[1]);
+                $prefix = "{$period}_{$index}";
+                $expressions[] = "COUNT(DISTINCT CASE WHEN submitted_at BETWEEN ? AND ? AND DATE(submitted_at) > absence_date THEN student_id END) as {$prefix}_late";
+                array_push($bindings, ...$bounds);
+                $expressions[] = "COUNT(DISTINCT CASE WHEN approved_at BETWEEN ? AND ? AND {$currentSlipRemark} = ? AND status IN (?, ?, ?) THEN student_id END) as {$prefix}_excused";
+                array_push($bindings, $bounds[0], $bounds[1], 'EXCUSED', 'approved', 'acknowledged', 'completed');
+                $expressions[] = "COUNT(CASE WHEN approved_at BETWEEN ? AND ? THEN 1 END) as {$prefix}_confirmed";
+                array_push($bindings, ...$bounds);
+                $expressions[] = "COUNT(CASE WHEN completed_at BETWEEN ? AND ? THEN 1 END) as {$prefix}_completed";
+                array_push($bindings, ...$bounds);
+            }
+        }
+        $metrics = (clone $query)->where(fn ($requests) => $requests
+            ->whereBetween('submitted_at', [$rangeStart, $rangeEnd])
+            ->orWhereBetween('approved_at', [$rangeStart, $rangeEnd])
+            ->orWhereBetween('completed_at', [$rangeStart, $rangeEnd]))
+            ->toBase()->selectRaw(implode(', ', $expressions), $bindings)->first();
+        $analyticsByPeriod = collect($periods)->map(fn ($buckets, $period) => $buckets
+            ->map(function (Carbon $start, int $index) use ($metrics, $period) {
+                $prefix = "{$period}_{$index}";
                 $label = match ($period) {
                     'day' => $start->format('D j'),
                     'week' => $start->format('M j'),
                     default => $start->format('M'),
                 };
 
-                return ['label' => $label, 'late' => (int) $metrics->late, 'excused' => (int) $metrics->excused,
-                    'confirmed' => (int) $metrics->confirmed, 'completed' => (int) $metrics->completed];
-            })->values();
-        });
+                return ['label' => $label, 'late' => (int) $metrics->{"{$prefix}_late"},
+                    'excused' => (int) $metrics->{"{$prefix}_excused"},
+                    'confirmed' => (int) $metrics->{"{$prefix}_confirmed"},
+                    'completed' => (int) $metrics->{"{$prefix}_completed"}];
+            })->values());
         // Keep the monthly variables available for existing integrations.
         $analytics = $analyticsByPeriod['month'];
         $analyticsMax = max(1, (int) $analytics->flatMap(fn ($bucket) => [$bucket['late'], $bucket['excused']])->max());

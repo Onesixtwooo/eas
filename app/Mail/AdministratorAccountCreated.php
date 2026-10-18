@@ -15,7 +15,7 @@ class AdministratorAccountCreated extends Mailable
 
     public function __construct(
         public User $administrator,
-        public string $temporaryPassword,
+        public string $setupUrl,
     ) {}
 
     public function envelope(): Envelope

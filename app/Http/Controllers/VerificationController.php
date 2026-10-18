@@ -11,32 +11,29 @@ class VerificationController extends Controller
 
     public function show(string $reference)
     {
-        $item = ExcuseRequest::with(['student.user', 'subject', 'facilitator.user', 'subjects', 'facilitators.user', 'documents'])
+        $item = ExcuseRequest::with(['student.user', 'subject', 'facilitator.user', 'subjects', 'facilitators.user', 'documents', 'slipIssuance', 'slipAmendments'])
             ->where(fn ($query) => $query
                 ->where('reference_number', $reference)
                 ->orWhere('legacy_reference_number', $reference))
-            ->whereIn('status', self::VERIFIABLE_STATUSES)
+            ->where(fn ($query) => $query->whereIn('status', self::VERIFIABLE_STATUSES)
+                ->orWhereNotNull('approved_at'))
             ->first();
 
         if (! $item) {
             $archive = ExcuseRequestArchive::where(fn ($query) => $query
                 ->where('reference_number', $reference)
                 ->orWhere('legacy_reference_number', $reference))
-                ->whereIn('status', self::VERIFIABLE_STATUSES)->first();
-            if ($archive) return view('verify-archived', compact('archive', 'reference'));
+                ->first();
+            if ($archive && (in_array($archive->status, self::VERIFIABLE_STATUSES, true)
+                || ! empty($archive->records['request']['approved_at']))) {
+                return view('verify-archived', compact('archive', 'reference'));
+            }
 
             $fallback = auth()->check()
                 ? (auth()->user()->role === 'student' ? route('requests.index') : route('dashboard'))
                 : route('login');
 
-            $previous = url()->previous();
-            $current = url()->current();
-
-            $destination = ($previous && $previous !== $current && $previous !== url('/'))
-                ? $previous
-                : $fallback;
-
-            return redirect()->to($destination)
+            return redirect()->to($fallback)
                 ->with('error', "Invalid slip: No official record was found for reference '{$reference}'.");
         }
 

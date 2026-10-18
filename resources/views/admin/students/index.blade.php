@@ -200,8 +200,14 @@
 </style>
 <script>
 async function refreshStudentPresence() {
+    if (document.hidden) return;
     try {
-        const response = await fetch(@json(route('realtime.presence')), {headers: {'Accept': 'application/json'}, cache: 'no-store'});
+        const userIds = [...document.querySelectorAll('[data-presence-user]')].map(element => element.dataset.presenceUser);
+        if (userIds.length === 0) return;
+        const params = new URLSearchParams();
+        userIds.forEach(id => params.append('user_ids[]', id));
+        const response = await fetch(`${@json(route('realtime.presence'))}?${params}`, {headers: {'Accept': 'application/json'}, cache: 'no-store'});
+        if (response.status === 401) return window.handleSessionExpiry(response);
         if (!response.ok) return;
         const online = new Set((await response.json()).online_user_ids.map(String));
         document.querySelectorAll('[data-presence-user]').forEach(element => {
@@ -212,6 +218,7 @@ async function refreshStudentPresence() {
     } catch (error) {}
 }
 refreshStudentPresence();
-setInterval(refreshStudentPresence, 10000);
+setInterval(refreshStudentPresence, 30000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshStudentPresence(); });
 </script>
 @endsection

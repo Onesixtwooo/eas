@@ -2,7 +2,9 @@
 namespace App\Http\Requests;
 
 use App\Models\Course;
+use App\Services\SanitizedImageStorage;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Rule;
 
@@ -26,13 +28,9 @@ class RegisterStudentRequest extends FormRequest
             'assessment_form' => [
                 Rule::requiredIf($this->routeIs('register.store')),
                 'nullable',
-                'file',
-                'image',
-                'mimes:jpg,jpeg,png',
-                'max:5120',
-                'dimensions:min_width=100,min_height=100,max_width=6000,max_height=6000',
+                ...SanitizedImageStorage::validationRules(),
                 function (string $attribute, mixed $value, \Closure $fail): void {
-                    if (! $value?->isValid()) {
+                    if (! $value instanceof UploadedFile || ! $value->isValid()) {
                         return;
                     }
 

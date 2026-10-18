@@ -11,6 +11,7 @@ use App\Services\InvalidateUserSessions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -71,7 +72,7 @@ class UserAccountController extends Controller
         $data['roles'] = $roles;
         $data['adviser_year_level'] = in_array('adviser', $roles, true) ? (int) $data['adviser_year_level'] : null;
 
-        $password = Str::random(12);
+        $password = Str::random(64);
 
         DB::transaction(function () use ($data, $password) {
             $administrator = (new User([
@@ -90,12 +91,14 @@ class UserAccountController extends Controller
                 Faculty::create(['user_id' => $administrator->id, 'name' => $administrator->name, 'designation' => 'Course Facilitator']);
             }
 
-            Mail::to($administrator->email)->send(
-                new AdministratorAccountCreated($administrator, $password)
-            );
+            $token = Password::broker()->createToken($administrator);
+            Mail::to($administrator->email)->send(new AdministratorAccountCreated(
+                $administrator,
+                route('password.reset', ['token' => $token, 'email' => $administrator->email]),
+            ));
         });
 
-        return redirect()->route('admin.accounts.index')->with('success', 'Account created and login details emailed.');
+        return redirect()->route('admin.accounts.index')->with('success', 'Account created and password setup link emailed.');
     }
 
     public function update(Request $request, User $account, InvalidateUserSessions $invalidateSessions)

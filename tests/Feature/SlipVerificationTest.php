@@ -13,6 +13,8 @@ use App\Models\Semester;
 use App\Models\Student;
 use App\Models\Subject;
 use App\Models\User;
+use App\Services\ExcuseRequestArchiveService;
+use App\Services\RequestWorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -63,12 +65,37 @@ class SlipVerificationTest extends TestCase
             ->assertSee($uuidRequest->reference_number);
     }
 
-    public function test_invalid_slip_reference_redirects_back_to_previous_page_with_error(): void
+    public function test_reconstructed_slip_details_are_labeled_before_and_after_archiving(): void
+    {
+        $request = $this->createVerifiableRequest('approved', 'HISTORICAL-REF-1');
+        $request->slipIssuance()->create([
+            'snapshot' => app(RequestWorkflowService::class)->slipSnapshot($request, 'reconstructed'),
+        ]);
+        $request->student->user->update(['name' => 'Later Student Name']);
+
+        $this->get(route('verify', $request->reference_number))
+            ->assertOk()
+            ->assertSee('Historical slip details were reconstructed')
+            ->assertSee('Recorded initial result')
+            ->assertDontSee('Later Student Name');
+
+        $this->actingAs($request->student->user)->get(route('requests.slip', $request))
+            ->assertOk()->assertSee('Historical slip details were reconstructed');
+
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        app(ExcuseRequestArchiveService::class)->archiveAndRemove($request, $admin);
+        $this->get(route('verify', 'HISTORICAL-REF-1'))
+            ->assertOk()
+            ->assertSee('Historical slip details were reconstructed')
+            ->assertSee('Recorded initial result');
+    }
+
+    public function test_invalid_slip_reference_uses_an_internal_fallback_even_with_an_external_referer(): void
     {
         $studentUser = User::factory()->create(['role' => 'student', 'is_active' => true]);
 
         $response = $this->actingAs($studentUser)
-            ->from(route('requests.index'))
+            ->from('https://outside.example/phishing')
             ->get(route('verify', 'INVALID-NONEXISTENT-REF'));
 
         $response->assertRedirect(route('requests.index'))

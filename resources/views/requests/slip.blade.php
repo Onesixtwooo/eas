@@ -12,6 +12,10 @@
 
 <article class="excuse-slip">
     @php
+        $issued = $item->slipIssuance?->snapshot;
+        $reconstructed = ($issued['snapshot_source'] ?? null) !== 'captured';
+        $issuedAt = $issued && $issued['issued_at'] ? \Illuminate\Support\Carbon::parse($issued['issued_at']) : $item->approved_at;
+        $absenceDate = $issued ? \Illuminate\Support\Carbon::parse($issued['absence_date']) : $item->absence_date;
         $slipSubjects = $item->subjects->isNotEmpty() ? $item->subjects : collect([$item->subject]);
         $slipFacilitators = $item->facilitators->isNotEmpty() ? $item->facilitators : collect([$item->facilitator]);
         $recipientLines = $item->subjects->isNotEmpty()
@@ -20,6 +24,7 @@
                 return $subject->code.' — '.($facilitator?->display_name ?? 'Instructor');
             })
             : collect([$item->subject->code.' — '.$item->facilitator->display_name]);
+        if ($issued) $recipientLines = collect($issued['recipient_lines']);
     @endphp
     <header class="slip-header">
         <img src="{{ asset('images.jpg') }}" alt="OLSHCO logo" class="slip-logo">
@@ -31,10 +36,25 @@
         </div>
     </header>
 
+    @if($reconstructed)
+        <div style="margin:12px 0;padding:10px;border:1px solid #d97706;background:#fffbeb;font-size:12px;">
+            Historical slip details were reconstructed from records available when history tracking began. They may differ from the original printed slip.
+        </div>
+    @endif
+
+    @if($item->slipAmendments->isNotEmpty())
+        @php($latestAmendment = $item->slipAmendments->first())
+        <div style="margin:12px 0;padding:10px;border:2px solid #92400e;background:#fffbeb;font-weight:bold;">
+            AMENDED: Current official result is {{ $latestAmendment->slip_remark }}.
+            {{ $latestAmendment->remarks }}
+            Verify the current record using the QR code below.
+        </div>
+    @endif
+
     <section class="slip-body">
         <div class="form-row date-row">
             <span>DATE:</span>
-            <span class="fill-line">{{ $item->approved_at?->format('F d, Y') }}</span>
+            <span class="fill-line">{{ $issuedAt?->format('F d, Y') }}</span>
         </div>
 
         <div class="recipient">
@@ -50,21 +70,21 @@
 
         <p class="sentence">
             I was absent from your class due to
-            <span class="fill-line reason-line">{{ $item->reasonCategory->name }}</span>.
+            <span class="fill-line reason-line">{{ $issued['reason_name'] ?? $item->reasonCategory->name }}</span>.
         </p>
 
         <p class="sentence request-line">
             In this connection, please excuse me for failing to attend your class
-            <span class="fill-line class-line">{{ $slipSubjects->pluck('code')->join(', ') }}</span>
+            <span class="fill-line class-line">{{ $issued ? implode(', ', $issued['subject_codes']) : $slipSubjects->pluck('code')->join(', ') }}</span>
             last
-            <span class="fill-line absence-line">{{ $item->absence_date->format('F d, Y') }}</span>.
+            <span class="fill-line absence-line">{{ $absenceDate->format('F d, Y') }}</span>.
         </p>
 
         <p class="sentence">
             Request time:
             <span class="fill-line reason-line">
-                @if($item->start_time)
-                    {{ date('g:i A', strtotime($item->start_time)) }}
+                @if($issued ? $issued['start_time'] : $item->start_time)
+                    {{ date('g:i A', strtotime($issued ? $issued['start_time'] : $item->start_time)) }}
                 @else
                     Not recorded
                 @endif
@@ -76,7 +96,7 @@
         <div class="respectfully">
             <p>Respectfully,</p>
             <div class="student-signature">
-                <strong>{{ $item->student->user->name }}</strong>
+                <strong>{{ $issued['student_name'] ?? $item->student->user->name }}</strong>
             </div>
         </div>
     </section>
@@ -97,16 +117,16 @@
         <tbody>
             <tr>
                 <td class="remarks-cell">
-                    <strong class="slip-result">{{ $item->slip_remark ?? 'EXCUSED' }}</strong>
-                    @if($item->official_remarks)
-                        <span class="official-remarks">{{ $item->official_remarks }}</span>
+                    <strong class="slip-result">{{ ($issued ? $issued['slip_remark'] : $item->slip_remark) ?? 'EXCUSED' }}</strong>
+                    @if($issued ? $issued['official_remarks'] : $item->official_remarks)
+                        <span class="official-remarks">{{ $issued ? $issued['official_remarks'] : $item->official_remarks }}</span>
                     @endif
                 </td>
                 <td class="issuer">
-                    <strong>{{ strtoupper($programHeadName) }}</strong>
+                    <strong>{{ strtoupper($issued['issuer_name'] ?? $programHeadName) }}</strong>
                     <em>BSIT PROGRAM HEAD</em>
                 </td>
-                <td class="verified-date">{{ $item->approved_at?->format('m/d/Y') }}</td>
+                <td class="verified-date">{{ $issuedAt?->format('m/d/Y') }}</td>
             </tr>
         </tbody>
     </table>

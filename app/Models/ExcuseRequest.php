@@ -64,4 +64,14 @@ class ExcuseRequest extends Model
     {
         return $this->hasMany(SupportingDocument::class);
     }
+
+    public function slipIssuance()
+    {
+        return $this->hasOne(SlipIssuance::class);
+    }
+
+    public function slipAmendments()
+    {
+        return $this->hasMany(SlipAmendment::class)->orderByDesc('id');
+    }
 }

@@ -57,6 +57,16 @@ class AccountArchiveTest extends TestCase
             'absence_date' => today()->toDateString(),
             'reason_category_id' => ReasonCategory::create(['name' => 'Illness'])->id,
             'explanation' => 'Sick', 'status' => 'approved', 'reference_number' => 'ARCHIVED-ACCOUNT-SLIP',
+            'approved_at' => now(), 'slip_remark' => 'EXCUSED',
+        ]);
+        $request->slipIssuance()->create(['snapshot' => [
+            'student_name' => 'Name at issuance', 'student_number' => $student->student_number,
+            'subject_codes' => ['PF101'], 'absence_date' => today()->toDateString(),
+            'slip_remark' => 'EXCUSED', 'official_remarks' => 'Original decision.',
+        ]]);
+        $request->slipAmendments()->create([
+            'action_by' => $admin->id, 'slip_remark' => 'CONDITIONAL',
+            'remarks' => 'Revised after review.',
         ]);
         $request->histories()->create(['new_status' => 'draft', 'action_by' => $studentUser->id]);
         $request->documents()->create([
@@ -74,6 +84,8 @@ class AccountArchiveTest extends TestCase
         $this->assertSame('Followed up with guardian.', $archive->records['daily_absence_reports'][0]['adviser_comment']);
         $this->assertSame($report->id, $archive->records['daily_absence_reports'][0]['id']);
         $this->assertCount(1, $archive->records['request_status_histories']);
+        $this->assertCount(1, $archive->records['slip_issuances']);
+        $this->assertCount(1, $archive->records['slip_amendments']);
         $this->assertArrayNotHasKey('password', $archive->records['user']);
         $this->assertCount(2, $archive->files);
         foreach ($archive->files as $file) Storage::disk('local')->assertExists($file['archive_path']);
@@ -86,7 +98,8 @@ class AccountArchiveTest extends TestCase
             ->assertOk()->assertDownload('evidence.pdf');
         auth()->logout();
         $this->get(route('verify', 'ARCHIVED-ACCOUNT-SLIP'))->assertOk()
-            ->assertSee('VALID OFFICIAL SLIP')->assertSee($studentUser->name);
+            ->assertSee('AMENDED OFFICIAL SLIP')->assertSee('Name at issuance')
+            ->assertSee('CONDITIONAL')->assertSee('Revised after review.');
     }
 
     public function test_referenced_faculty_account_is_archived_and_disabled_without_erasing_live_requests(): void

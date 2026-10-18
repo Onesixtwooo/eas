@@ -8,7 +8,7 @@
     <div class="mt-4">
         <p class="text-sm font-semibold uppercase tracking-widest text-[#245B8E]">Account</p>
         <h1 class="mt-1 text-3xl font-bold text-slate-900">Add Account</h1>
-        <p class="mt-2 text-slate-500">Create an administrative, faculty, adviser, or dual-role account. A generated password will be emailed to the account holder.</p>
+        <p class="mt-2 text-slate-500">Create an administrative, faculty, adviser, or dual-role account. A password setup link will be emailed to the account holder.</p>
     </div>
 
     <form method="post" action="{{ route('admin.accounts.store') }}" class="mt-7 space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

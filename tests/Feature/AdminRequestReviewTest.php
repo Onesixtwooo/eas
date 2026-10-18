@@ -6,6 +6,7 @@ use App\Models\AcademicYear;
 use App\Models\Course;
 use App\Models\ExcuseRequest;
 use App\Models\Faculty;
+use App\Models\InstructorAssignment;
 use App\Models\ReasonCategory;
 use App\Models\Section;
 use App\Models\Semester;
@@ -113,6 +114,7 @@ class AdminRequestReviewTest extends TestCase
         $this->assertSame('approved', $request->status);
         $this->assertSame($admin->id, $request->reviewed_by);
         $this->assertSame('Dr. Original Issuer', $request->slip_issuer_name);
+        $this->assertSame('captured', $request->slipIssuance->snapshot['snapshot_source']);
         $this->assertTrue(Str::isUuid($request->reference_number));
         $this->actingAs($admin)->put(route('requests.settings.update'), [
             'program_head_name' => 'Dr. New Issuer',
@@ -134,6 +136,44 @@ class AdminRequestReviewTest extends TestCase
             ->assertDontSee('DR. NEW ISSUER')
             ->assertSee('data:image/svg+xml;base64,', false);
 
+        $issuedAt = $request->approved_at;
+        $reference = $request->reference_number;
+        $this->actingAs($admin)->post(route('requests.review', $request), [
+            'decision' => 'approved',
+            'slip_remark' => 'CONDITIONAL',
+            'remarks' => 'Amendment after issuance.',
+        ])->assertSessionHasNoErrors();
+        $request->refresh();
+        $this->assertTrue($request->approved_at->equalTo($issuedAt));
+        $this->assertSame($reference, $request->reference_number);
+        $this->assertSame('Dr. Original Issuer', $request->slip_issuer_name);
+        $this->assertSame('EXCUSED', $request->slip_remark);
+        $this->assertDatabaseHas('slip_amendments', [
+            'excuse_request_id' => $request->id,
+            'slip_remark' => 'CONDITIONAL',
+            'remarks' => 'Amendment after issuance.',
+        ]);
+        $this->actingAs($admin)->get(route('requests.slip', $request))
+            ->assertOk()->assertSee('DR. ORIGINAL ISSUER')->assertDontSee('DR. NEW ISSUER')
+            ->assertSee('EXCUSED')->assertSee('AMENDED: Current official result is CONDITIONAL.')
+            ->assertSee('Amendment after issuance.');
+        $studentUser->update(['name' => 'Changed Student Name']);
+        $subject->update(['code' => 'NEW101']);
+        $this->actingAs($admin)->get(route('requests.slip', $request))
+            ->assertOk()->assertSee('Antolin Catabona')->assertSee('PF101')
+            ->assertDontSee('Changed Student Name')->assertDontSee('NEW101');
+        $this->get(route('verify', $reference))
+            ->assertOk()->assertSee('AMENDED OFFICIAL SLIP')
+            ->assertSee('Original issued result')->assertSee('Current official result')
+            ->assertSee('CONDITIONAL')->assertSee('Amendment after issuance.')
+            ->assertSee('Antolin Catabona')->assertSee('PF101')
+            ->assertDontSee('Changed Student Name')->assertDontSee('NEW101');
+
+        $this->actingAs($admin)->post(route('requests.review', $request), [
+            'decision' => 'returned', 'remarks' => 'Change the subject.',
+        ])->assertSessionHasErrors('status');
+        $this->assertSame('approved', $request->fresh()->status);
+
         $this->actingAs($admin)
             ->get(route('dashboard'))
             ->assertOk()
@@ -141,10 +181,11 @@ class AdminRequestReviewTest extends TestCase
             ->assertSee('Excused Students')
             ->assertSee('Student Excuse Analytics')
             ->assertViewHas('lateStudents', 0)
-            ->assertViewHas('excusedStudents', 1)
+            ->assertViewHas('excusedStudents', 0)
             ->assertViewHas('analytics', fn ($analytics) => $analytics->count() === 6)
             ->assertViewHas('analyticsByPeriod', fn ($analytics) =>
                 $analytics['day']->count() === 7
+                && $analytics['day']->last()['excused'] === 0
                 && $analytics['week']->count() === 6
                 && $analytics['month']->count() === 6
             );
@@ -157,11 +198,36 @@ class AdminRequestReviewTest extends TestCase
             ->assertSessionHasNoErrors();
 
         $this->assertSame('rejected', $request->fresh()->status);
+        $this->get(route('verify', $reference))
+            ->assertOk()->assertSee('REVOKED OFFICIAL SLIP')
+            ->assertSee('Current official result')->assertSee('REVOKED');
+        $this->actingAs($admin)->post(route('requests.review', $request), [
+            'decision' => 'approved', 'slip_remark' => 'EXCUSED', 'remarks' => 'Reapprove.',
+        ])->assertSessionHasErrors('status');
+        InstructorAssignment::create([
+            'faculty_id' => $faculty->id, 'course_id' => $course->id,
+            'subject_id' => $subject->id, 'section_id' => $section->id,
+            'year_level' => 1, 'is_active' => true,
+        ]);
+        $this->actingAs($studentUser)->post(route('requests.store'), [
+            'absence_date' => $request->absence_date->toDateString(),
+            'subject_ids' => [$subject->id],
+            'reason_category_id' => $reason->id,
+            'explanation' => 'A corrected request after the original slip was revoked.',
+            'intent' => 'draft',
+            'declaration' => '1',
+        ])->assertSessionHasNoErrors();
+        $this->assertSame(2, ExcuseRequest::where('student_id', $student->id)->count());
         $this->assertDatabaseHas('request_status_histories', [
             'excuse_request_id' => $request->id,
             'previous_status' => 'approved',
             'new_status' => 'rejected',
         ]);
+        $this->actingAs($admin)->delete(route('requests.destroy', $request))
+            ->assertSessionHasNoErrors();
+        $this->get(route('verify', $reference))
+            ->assertOk()->assertSee('REVOKED OFFICIAL SLIP')
+            ->assertSee('Amendment after issuance.');
     }
 
     public function test_official_remarks_are_printed_on_an_approved_slip(): void

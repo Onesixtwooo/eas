@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Exceptions\VirusScanException;
 use App\Http\Requests\StoreExcuseRequest;
 use App\Models\AcademicYear;
 use App\Models\ExcuseRequest;
@@ -15,14 +14,12 @@ use App\Models\SupportingDocument;
 use App\Models\SystemSetting;
 use App\Services\RequestWorkflowService;
 use App\Services\ExcuseRequestArchiveService;
-use App\Services\VirusScanner;
+use App\Services\SanitizedImageStorage;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\Writer\SvgWriter;
 use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -30,24 +27,6 @@ use Throwable;
 class ExcuseRequestController extends Controller
 {
     private const FACULTY_VISIBLE_STATUSES = ['approved', 'acknowledged', 'completed'];
-
-    private function scanUploadedDocument(UploadedFile $file, string $attribute = 'document'): void
-    {
-        try {
-            app(VirusScanner::class)->scan($file->getRealPath());
-        } catch (VirusScanException $exception) {
-            Log::warning('Document antivirus scan rejected an upload.', [
-                'infected' => $exception->infected,
-                'error' => $exception->getMessage(),
-            ]);
-
-            throw ValidationException::withMessages([
-                $attribute => $exception->infected
-                    ? 'The supporting document was rejected because malware was detected.'
-                    : 'The supporting document could not be safely scanned. Please try again later.',
-            ]);
-        }
-    }
 
     private function permitted(ExcuseRequest $e): bool
     {
@@ -200,7 +179,7 @@ class ExcuseRequestController extends Controller
         return view('requests.form', ['requestItem' => new ExcuseRequest, 'assignments' => $assignments, 'reasons' => ReasonCategory::where('is_active', true)->get()]);
     }
 
-    public function store(StoreExcuseRequest $r, RequestWorkflowService $flow)
+    public function store(StoreExcuseRequest $r, RequestWorkflowService $flow, SanitizedImageStorage $images)
     {
         $data = $r->validated();
         $subjectIds = collect($data['subject_ids'])->map(fn ($id) => (int) $id)->values();
@@ -217,21 +196,19 @@ class ExcuseRequestController extends Controller
             throw ValidationException::withMessages(['academic_period' => 'The current academic year and semester have not been configured. Please contact the administrator.']);
         }
         $file = $r->file('document');
-        if ($file) {
-            $this->scanUploadedDocument($file);
-        }
         $primary = $assignments->get($subjectIds->first());
         $data += ['student_id' => $student->id, 'subject_id' => $primary->subject_id, 'facilitator_id' => $primary->faculty_id, 'academic_year_id' => $academicYearId, 'semester_id' => $semesterId, 'status' => 'draft'];
         $storedPath = null;
         try {
-            $result = DB::transaction(function () use ($r, $data, $subjectIds, $assignments, $student, $file, $flow, &$storedPath) {
+            $result = DB::transaction(function () use ($r, $data, $subjectIds, $assignments, $student, $file, $flow, $images, &$storedPath) {
                 $lockedStudent = Student::whereKey($student->id)->with(['section', 'course'])->lockForUpdate()->firstOrFail();
                 if ($lockedStudent->year_level !== $student->year_level || $lockedStudent->section_id !== $student->section_id) {
                     throw ValidationException::withMessages(['subject_ids' => 'Your academic placement changed. Reload the form and choose your current subjects.']);
                 }
                 $existing = ExcuseRequest::where('student_id', $student->id)
                     ->whereDate('absence_date', $data['absence_date'])
-                    ->where('status', '!=', 'cancelled')
+                    ->where(fn ($query) => $query->whereNotIn('status', ['cancelled', 'rejected'])
+                        ->orWhere(fn ($rejected) => $rejected->where('status', 'rejected')->whereNull('approved_at')->whereNull('reference_number')))
                     ->where(fn ($q) => $q->whereIn('subject_id', $subjectIds)
                         ->orWhereHas('subjects', fn ($s) => $s->whereIn('subjects.id', $subjectIds)))
                     ->latest()->lockForUpdate()->first();
@@ -248,14 +225,12 @@ class ExcuseRequestController extends Controller
                 $item->subjects()->attach($subjectIds->mapWithKeys(fn ($id) => [$id => ['facilitator_id' => $assignments->get($id)->faculty_id]])->all());
                 $item->histories()->create(['new_status' => 'draft', 'action_by' => $r->user()->id, 'remarks' => 'Request created for '.$subjectIds->count().' subject(s)']);
                 if ($file) {
-                    $storedPath = $file->store('supporting-documents', 'local');
-                    if (! $storedPath) {
-                        throw ValidationException::withMessages(['document' => 'The attachment could not be stored. Please try again.']);
-                    }
+                    $storedPath = $images->store($file, 'supporting-documents', 'document');
                     $item->documents()->create([
                         'disk' => 'local', 'path' => $storedPath,
                         'original_name' => $file->getClientOriginalName(),
-                        'mime_type' => $file->getMimeType(), 'size' => $file->getSize(),
+                        'mime_type' => Storage::disk('local')->mimeType($storedPath),
+                        'size' => Storage::disk('local')->size($storedPath),
                     ]);
                 }
                 if ($r->intent === 'submit') {
@@ -281,7 +256,7 @@ class ExcuseRequestController extends Controller
     public function show(ExcuseRequest $excuseRequest)
     {
         abort_unless($this->permitted($excuseRequest), 403);
-        $excuseRequest->load(['student.user', 'student.course', 'student.section', 'subject', 'facilitator.user', 'subjects', 'facilitators.user', 'reasonCategory', 'histories.actor', 'documents']);
+        $excuseRequest->load(['student.user', 'student.course', 'student.section', 'subject', 'facilitator.user', 'subjects', 'facilitators.user', 'reasonCategory', 'histories.actor', 'documents', 'slipIssuance', 'slipAmendments.actor']);
         $assignments = auth()->user()->role === 'student' && in_array($excuseRequest->status, ['submitted', 'returned'], true) ? $this->assignmentsFor(auth()->user()->student) : collect();
 
         return view('requests.show', ['item' => $excuseRequest, 'assignments' => $assignments]);
@@ -291,7 +266,7 @@ class ExcuseRequestController extends Controller
     {
         $student = auth()->user()->student;
         abort_unless($student && $excuseRequest->student_id === $student->id, 403);
-        abort_unless(in_array($excuseRequest->status, ['submitted', 'returned'], true), 403);
+        abort_unless(in_array($excuseRequest->status, ['submitted', 'returned'], true) && ! $excuseRequest->approved_at && ! $excuseRequest->reference_number, 403);
         abort_unless($excuseRequest->placementMatchesStudent(), 403);
         $excuseRequest->load(['documents', 'subjects']);
 
@@ -313,28 +288,25 @@ class ExcuseRequestController extends Controller
         ]);
     }
 
-    public function updateAttachment(Request $r, ExcuseRequest $excuseRequest)
+    public function updateAttachment(Request $r, ExcuseRequest $excuseRequest, SanitizedImageStorage $images)
     {
         $student = $r->user()->student;
         abort_unless($student && $excuseRequest->student_id === $student->id, 403);
-        $data = $r->validate(['document' => 'required|file|mimes:pdf,jpg,jpeg,png|max:5120']);
+        $data = $r->validate(['document' => ['required', ...SanitizedImageStorage::validationRules()]]);
         $file = $data['document'];
-        $this->scanUploadedDocument($file);
         $path = null;
         try {
-            $oldDocuments = DB::transaction(function () use ($r, $excuseRequest, $student, $file, &$path) {
+            $oldDocuments = DB::transaction(function () use ($r, $excuseRequest, $student, $file, $images, &$path) {
                 $current = ExcuseRequest::whereKey($excuseRequest->id)->lockForUpdate()->firstOrFail();
                 abort_unless($current->student_id === $student->id && $current->status === 'draft', 403);
 
-                $path = $file->store('supporting-documents', 'local');
-                if (! $path) {
-                    throw ValidationException::withMessages(['document' => 'The attachment could not be stored. Please try again.']);
-                }
+                $path = $images->store($file, 'supporting-documents', 'document');
                 $oldDocuments = $current->documents()->get();
                 $current->documents()->create([
                     'disk' => 'local', 'path' => $path,
                     'original_name' => $file->getClientOriginalName(),
-                    'mime_type' => $file->getMimeType(), 'size' => $file->getSize(),
+                    'mime_type' => Storage::disk('local')->mimeType($path),
+                    'size' => Storage::disk('local')->size($path),
                 ]);
                 $current->documents()->whereKey($oldDocuments->modelKeys())->delete();
                 $current->histories()->create([
@@ -362,7 +334,7 @@ class ExcuseRequestController extends Controller
     {
         $student = $r->user()->student;
         abort_unless($student && $excuseRequest->student_id === $student->id, 403);
-        abort_unless(in_array($excuseRequest->status, ['submitted', 'returned'], true), 403);
+        abort_unless(in_array($excuseRequest->status, ['submitted', 'returned'], true) && ! $excuseRequest->approved_at && ! $excuseRequest->reference_number, 403);
         abort_unless($excuseRequest->placementMatchesStudent(), 403);
         if (! $r->has('subject_ids') && $r->filled('subject_id')) {
             $r->merge(['subject_ids' => [$r->input('subject_id')]]);
@@ -377,11 +349,12 @@ class ExcuseRequestController extends Controller
         $duplicate = DB::transaction(function () use ($r, $excuseRequest, $data, $subjectIds, $assignments, $primary, $student) {
             Student::whereKey($student->id)->lockForUpdate()->firstOrFail();
             $current = ExcuseRequest::whereKey($excuseRequest->id)->lockForUpdate()->firstOrFail();
-            abort_unless($current->student_id === $student->id && in_array($current->status, ['submitted', 'returned'], true), 403);
+            abort_unless($current->student_id === $student->id && in_array($current->status, ['submitted', 'returned'], true) && ! $current->approved_at && ! $current->reference_number, 403);
             abort_unless($current->placementMatchesStudent(), 403);
             $duplicate = ExcuseRequest::where('student_id', $student->id)
                 ->whereDate('absence_date', $data['absence_date'])
-                ->where('status', '!=', 'cancelled')
+                ->where(fn ($query) => $query->whereNotIn('status', ['cancelled', 'rejected'])
+                    ->orWhere(fn ($rejected) => $rejected->where('status', 'rejected')->whereNull('approved_at')->whereNull('reference_number')))
                 ->whereKeyNot($excuseRequest->id)
                 ->where(fn ($q) => $q->whereIn('subject_id', $subjectIds)
                     ->orWhereHas('subjects', fn ($s) => $s->whereIn('subjects.id', $subjectIds)))
@@ -426,7 +399,7 @@ class ExcuseRequestController extends Controller
         $verificationUrl = route('verify', $excuseRequest->reference_number);
         $qrCode = (new Builder(writer: new SvgWriter, data: $verificationUrl, errorCorrectionLevel: ErrorCorrectionLevel::Medium, size: 220, margin: 8))->build()->getDataUri();
 
-        return view('requests.slip', ['item' => $excuseRequest->load(['student.user', 'student.course', 'student.section', 'subject', 'facilitator.user', 'subjects', 'facilitators.user', 'reasonCategory']), 'verificationUrl' => $verificationUrl, 'qrCode' => $qrCode, 'programHeadName' => $excuseRequest->slip_issuer_name ?: SystemSetting::valueFor('program_head_name', 'PRINCESS LEA ANN D. CALINA, MSIT')]);
+        return view('requests.slip', ['item' => $excuseRequest->load(['student.user', 'student.course', 'student.section', 'subject', 'facilitator.user', 'subjects', 'facilitators.user', 'reasonCategory', 'slipIssuance', 'slipAmendments']), 'verificationUrl' => $verificationUrl, 'qrCode' => $qrCode, 'programHeadName' => $excuseRequest->slip_issuer_name ?: SystemSetting::valueFor('program_head_name', 'PRINCESS LEA ANN D. CALINA, MSIT')]);
     }
 
     public function destroy(ExcuseRequest $excuseRequest, ExcuseRequestArchiveService $archives)

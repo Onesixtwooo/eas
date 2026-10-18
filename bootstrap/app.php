@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\ApplyActiveRole::class,
             \App\Http\Middleware\EnsureAccountIsActive::class,
             \Illuminate\Session\Middleware\AuthenticateSession::class,
+            \App\Http\Middleware\EnforceInteractionTimeout::class,
             \App\Http\Middleware\TrackSystemChanges::class,
             \App\Http\Middleware\PreventAuthenticatedPageCaching::class,
         ]);
@@ -26,21 +27,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (NotFoundHttpException|ModelNotFoundException $exception, Request $request) {
             if (! $request->expectsJson()) {
-                $hasReferer = $request->headers->has('referer');
-                $hasPreviousSession = $request->hasSession() && $request->session()->has('_previous.url');
-
                 $fallback = auth()->check()
                     ? (auth()->user()->role === 'student' ? route('requests.index') : route('dashboard'))
                     : route('login');
 
-                $previous = url()->previous();
-                $current = $request->fullUrl();
-
-                $destination = ($hasReferer || $hasPreviousSession) && ($previous && $previous !== $current && $previous !== url('/'))
-                    ? $previous
-                    : $fallback;
-
-                return redirect()->to($destination)
+                return redirect()->to($fallback)
                     ->with('error', 'The page or request you were looking for could not be found.');
             }
         });
