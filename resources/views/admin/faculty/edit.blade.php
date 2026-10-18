@@ -37,7 +37,7 @@
             @csrf
             <h2 class="font-bold text-[#123A63]">Connect an existing admin account</h2>
             <p class="text-sm text-slate-600">Keep this instructor profile, assignments, and request history while switching its portal login. The current faculty-only login will be disabled; accounts with other roles keep those roles. Messages sent by the old login remain attributed to it.</p>
-            <div><label for="admin_email">Admin account email *</label><input id="admin_email" type="email" name="admin_email" value="{{ old('admin_email', auth()->user()->email) }}" required>@error('admin_email')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
+            <div><label for="admin_email">Admin account email *</label><input id="admin_email" type="email" name="admin_email" value="{{ old('admin_email') }}" required>@error('admin_email')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
             <label class="flex items-start gap-3 text-sm text-slate-700"><input type="checkbox" name="confirm_reassignment" value="1" class="mt-1 size-4 w-auto" required><span>I understand that this replaces the current portal login for this instructor.</span></label>
             @error('confirm_reassignment')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
             <div class="flex justify-end"><button class="rounded-xl bg-[#123A63] px-5 py-3 font-semibold text-white">Connect admin account</button></div>
