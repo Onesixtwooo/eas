@@ -43,5 +43,15 @@
             <div class="flex justify-end"><button class="rounded-xl bg-[#123A63] px-5 py-3 font-semibold text-white">Connect admin account</button></div>
         </form>
     @endif
+
+    <form method="post" action="{{ route('admin.faculty.transfer-records', $faculty) }}" class="mt-6 space-y-4 rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">
+        @csrf
+        <h2 class="font-bold text-[#123A63]">Transfer this faculty profile's records</h2>
+        <p class="text-sm text-slate-600">Move assignments, subject links, excuse requests, and acknowledgments to another existing faculty profile. This profile will be removed. Its login keeps any other roles; a faculty-only login is disabled. Issued slip snapshots and messages stay as recorded.</p>
+        <div><label for="target_email">Destination faculty account email *</label><input id="target_email" type="email" name="target_email" value="{{ old('target_email') }}" required>@error('target_email')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
+        <label class="flex items-start gap-3 text-sm text-slate-700"><input type="checkbox" name="confirm_transfer" value="1" class="mt-1 size-4 w-auto" required><span>I understand that all live faculty records move to the destination profile and this profile is removed.</span></label>
+        @error('confirm_transfer')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
+        <div class="flex justify-end"><button class="rounded-xl bg-[#123A63] px-5 py-3 font-semibold text-white">Transfer faculty records</button></div>
+    </form>
 </div>
 @endsection

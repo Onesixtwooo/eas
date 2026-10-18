@@ -5,7 +5,14 @@ namespace Tests\Feature;
 use App\Mail\AdministratorAccountCreated;
 use App\Models\Faculty;
 use App\Models\Course;
+use App\Models\AcademicYear;
+use App\Models\DailyAbsenceReport;
+use App\Models\ExcuseRequest;
 use App\Models\InstructorAssignment;
+use App\Models\ReasonCategory;
+use App\Models\Section;
+use App\Models\Semester;
+use App\Models\Student;
 use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -249,5 +256,67 @@ class FacultyAccountTest extends TestCase
 
         $this->assertSame('Renamed Instructor', $faculty->refresh()->name);
         $this->assertNull($faculty->user_id);
+    }
+
+    public function test_admin_can_transfer_all_faculty_records_to_an_existing_faculty_account(): void
+    {
+        $sourceUser = User::factory()->create(['name' => 'Odie Catabona', 'email' => 'odie@example.com', 'role' => 'admin', 'roles' => ['admin', 'faculty', 'adviser'], 'is_active' => true]);
+        $targetUser = User::factory()->create(['name' => 'Mr. Odiether A. Catabona', 'email' => 'odiether@example.com', 'role' => 'faculty', 'roles' => ['faculty'], 'is_active' => true]);
+        $source = Faculty::create(['user_id' => $sourceUser->id, 'name' => 'Odie Catabona']);
+        $target = Faculty::create(['user_id' => $targetUser->id, 'name' => 'Mr. Odiether A. Catabona']);
+        $studentUser = User::factory()->create(['role' => 'student']);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'Information Technology']);
+        $section = Section::create(['course_id' => $course->id, 'name' => 'A', 'year_level' => 1]);
+        $student = Student::create(['user_id' => $studentUser->id, 'student_number' => '2026-2001', 'course_id' => $course->id, 'section_id' => $section->id, 'year_level' => 1]);
+        $subject = Subject::create(['code' => 'IT101', 'name' => 'Computing', 'course_id' => $course->id, 'year_level' => 1, 'facilitator_id' => $source->id]);
+        $assignment = InstructorAssignment::create(['faculty_id' => $source->id, 'course_id' => $course->id, 'subject_id' => $subject->id, 'year_level' => 1, 'is_active' => true]);
+        $report = DailyAbsenceReport::create(['instructor_assignment_id' => $assignment->id, 'student_id' => $student->id, 'report_date' => now()->toDateString()]);
+        $year = AcademicYear::create(['name' => '2026-2027', 'is_current' => true]);
+        $semester = Semester::create(['name' => 'First Semester', 'is_current' => true]);
+        $reason = ReasonCategory::create(['name' => 'Illness', 'is_active' => true]);
+        $excuse = ExcuseRequest::create(['reference_number' => 'EAS-TRANSFER', 'student_id' => $student->id, 'subject_id' => $subject->id, 'facilitator_id' => $source->id, 'academic_year_id' => $year->id, 'semester_id' => $semester->id, 'absence_date' => now()->toDateString(), 'reason_category_id' => $reason->id, 'explanation' => 'Medical appointment', 'status' => 'approved', 'approved_at' => now()]);
+        DB::table('excuse_request_subject')->insert(['excuse_request_id' => $excuse->id, 'subject_id' => $subject->id, 'facilitator_id' => $source->id, 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('instructor_acknowledgments')->insert(['excuse_request_id' => $excuse->id, 'faculty_id' => $source->id, 'remarks' => 'Acknowledged', 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('slip_issuances')->insert(['excuse_request_id' => $excuse->id, 'snapshot' => json_encode(['facilitator' => 'Odie Catabona']), 'created_at' => now(), 'updated_at' => now()]);
+
+        $this->actingAs($sourceUser)->post(route('admin.faculty.transfer-records', $source), [
+            'target_email' => $targetUser->email,
+            'confirm_transfer' => '1',
+        ])->assertRedirect(route('admin.faculty.edit', $target))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('faculty', ['id' => $source->id]);
+        $this->assertDatabaseHas('faculty', ['id' => $target->id, 'user_id' => $targetUser->id]);
+        $this->assertSame(['admin', 'adviser'], $sourceUser->fresh()->assignedRoles());
+        $this->assertTrue($sourceUser->fresh()->is_active);
+        $this->assertSame($target->id, $assignment->fresh()->faculty_id);
+        $this->assertSame($assignment->id, $report->fresh()->instructor_assignment_id);
+        $this->assertSame($target->id, $subject->fresh()->facilitator_id);
+        $this->assertSame($target->id, $excuse->fresh()->facilitator_id);
+        $this->assertDatabaseHas('excuse_request_subject', ['excuse_request_id' => $excuse->id, 'facilitator_id' => $target->id]);
+        $this->assertDatabaseHas('instructor_acknowledgments', ['excuse_request_id' => $excuse->id, 'faculty_id' => $target->id]);
+        $this->assertDatabaseHas('slip_issuances', ['excuse_request_id' => $excuse->id, 'snapshot' => json_encode(['facilitator' => 'Odie Catabona'])]);
+        $this->actingAs($targetUser)->get(route('requests.index'))->assertOk()->assertSee('EAS-TRANSFER');
+    }
+
+    public function test_transfer_rejects_overlapping_assignments_without_moving_records(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $targetUser = User::factory()->create(['role' => 'faculty', 'is_active' => true]);
+        $source = Faculty::create(['name' => 'Source']);
+        $target = Faculty::create(['user_id' => $targetUser->id, 'name' => 'Target']);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'Information Technology']);
+        $subject = Subject::create(['code' => 'IT101', 'name' => 'Computing', 'course_id' => $course->id]);
+        foreach ([$source, $target] as $member) {
+            InstructorAssignment::create(['faculty_id' => $member->id, 'course_id' => $course->id, 'subject_id' => $subject->id, 'year_level' => 1, 'is_active' => true]);
+        }
+
+        $this->actingAs($admin)->post(route('admin.faculty.transfer-records', $source), [
+            'target_email' => $targetUser->email,
+            'confirm_transfer' => '1',
+        ])->assertSessionHasErrors('target_email');
+
+        $this->assertDatabaseHas('faculty', ['id' => $source->id]);
+        $this->assertDatabaseCount('instructor_assignments', 2);
+        $this->assertDatabaseHas('instructor_assignments', ['faculty_id' => $source->id]);
     }
 }

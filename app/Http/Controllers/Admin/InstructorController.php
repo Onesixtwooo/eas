@@ -235,6 +235,71 @@ class InstructorController extends Controller
             ->with('success', 'This instructor profile is now connected to the administrator account. Assignments and request history were retained.');
     }
 
+    public function transferRecords(Request $request, Faculty $faculty, InvalidateUserSessions $invalidateSessions)
+    {
+        $data = $request->validate([
+            'target_email' => ['required', 'email', 'max:255', 'exists:users,email'],
+            'confirm_transfer' => ['accepted'],
+        ]);
+
+        $targetId = DB::transaction(function () use ($request, $faculty, $data, $invalidateSessions) {
+            $source = Faculty::lockForUpdate()->findOrFail($faculty->id);
+            $targetUser = User::where('email', $data['target_email'])->lockForUpdate()->firstOrFail();
+            $target = Faculty::where('user_id', $targetUser->id)->lockForUpdate()->first();
+            if (! $target || ! $targetUser->is_active || ! $targetUser->hasRole('faculty') || $targetUser->student()->exists() || $source->is($target)) {
+                throw ValidationException::withMessages(['target_email' => 'Choose a different active faculty account with its own instructor profile.']);
+            }
+
+            $sourceAssignments = InstructorAssignment::where('faculty_id', $source->id)->lockForUpdate()->get();
+            $targetAssignments = InstructorAssignment::where('faculty_id', $target->id)->lockForUpdate()->get();
+            $key = fn ($assignment) => implode(':', [
+                $assignment->course_id, $assignment->subject_id, $assignment->year_level,
+                $assignment->section_id ?? 'all',
+            ]);
+            $occupied = $targetAssignments->map($key)->all();
+            if ($sourceAssignments->contains(fn ($assignment) => in_array($key($assignment), $occupied, true))) {
+                throw ValidationException::withMessages(['target_email' => 'These profiles have overlapping course, subject, year, and section assignments. Resolve the duplicate assignments before transferring records.']);
+            }
+
+            $sourceAccount = $source->user_id ? User::lockForUpdate()->findOrFail($source->user_id) : null;
+            DB::table('instructor_assignments')->where('faculty_id', $source->id)->update(['faculty_id' => $target->id]);
+            DB::table('subjects')->where('facilitator_id', $source->id)->update(['facilitator_id' => $target->id]);
+            DB::table('excuse_requests')->where('facilitator_id', $source->id)->update(['facilitator_id' => $target->id]);
+            DB::table('excuse_request_subject')->where('facilitator_id', $source->id)->update(['facilitator_id' => $target->id]);
+            DB::table('instructor_acknowledgments')->where('faculty_id', $source->id)->update(['faculty_id' => $target->id]);
+
+            // The faculty row is removed only after every live faculty reference has moved.
+            if ($this->facultyHasAcademicRecords($source)) {
+                throw ValidationException::withMessages(['target_email' => 'Some faculty records could not be transferred. No changes were saved.']);
+            }
+            $source->delete();
+
+            if ($sourceAccount) {
+                $remainingRoles = array_values(array_diff($sourceAccount->assignedRoles(), ['faculty']));
+                if ($remainingRoles) {
+                    $primaryRole = $sourceAccount->getRawOriginal('role');
+                    $sourceAccount->forceFill([
+                        'role' => in_array($primaryRole, $remainingRoles, true) ? $primaryRole : $remainingRoles[0],
+                        'roles' => $remainingRoles,
+                    ]);
+                } else {
+                    $sourceAccount->forceFill(['is_active' => false]);
+                }
+                $sourceAccount->remember_token = Str::random(60);
+                $sourceAccount->save();
+                $invalidateSessions($sourceAccount, $sourceAccount->is($request->user()) ? $request->session()->getId() : null);
+                if ($sourceAccount->is($request->user())) {
+                    $request->session()->forget('active_role');
+                }
+            }
+
+            return $target->id;
+        });
+
+        return redirect()->route('admin.faculty.edit', $targetId)
+            ->with('success', 'Faculty assignments, requests, and acknowledgments were transferred to this account. Issued slip snapshots and account messages remain as recorded.');
+    }
+
     private function facultyHasAcademicRecords(Faculty $faculty): bool
     {
         return InstructorAssignment::where('faculty_id', $faculty->id)->exists()
