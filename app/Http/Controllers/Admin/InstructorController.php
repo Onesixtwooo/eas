@@ -179,6 +179,71 @@ class InstructorController extends Controller
         return redirect()->route('admin.faculty.index')->with('success', 'Faculty information updated.');
     }
 
+    public function reassignAccount(Request $request, Faculty $faculty, InvalidateUserSessions $invalidateSessions)
+    {
+        $data = $request->validate([
+            'admin_email' => ['required', 'email', 'max:255', 'exists:users,email'],
+            'confirm_reassignment' => ['accepted'],
+        ]);
+
+        DB::transaction(function () use ($request, $faculty, $data, $invalidateSessions) {
+            $faculty = Faculty::lockForUpdate()->findOrFail($faculty->id);
+            $admin = User::where('email', $data['admin_email'])->lockForUpdate()->firstOrFail();
+            if (! $admin->is_active || ! $admin->hasRole('admin', 'program_head') || $admin->student()->exists()) {
+                throw ValidationException::withMessages(['admin_email' => 'Choose an active administrator account.']);
+            }
+
+            if ($faculty->user_id === $admin->id) {
+                return;
+            }
+
+            $previousAccount = $faculty->user_id ? User::lockForUpdate()->findOrFail($faculty->user_id) : null;
+            if ($previousAccount?->is($request->user())) {
+                throw ValidationException::withMessages(['admin_email' => 'Ask another administrator to reassign the account you are currently using.']);
+            }
+
+            $adminFaculty = Faculty::where('user_id', $admin->id)->lockForUpdate()->first();
+            if ($adminFaculty) {
+                if ($this->facultyHasAcademicRecords($adminFaculty)) {
+                    throw ValidationException::withMessages(['admin_email' => 'This administrator already has a faculty profile with academic records. Those profiles need a manual review before they can be combined.']);
+                }
+                $adminFaculty->delete();
+            }
+
+            if ($previousAccount) {
+                $remainingRoles = array_values(array_diff($previousAccount->assignedRoles(), ['faculty']));
+                if ($remainingRoles) {
+                    $primaryRole = $previousAccount->getRawOriginal('role');
+                    $previousAccount->forceFill([
+                        'role' => in_array($primaryRole, $remainingRoles, true) ? $primaryRole : $remainingRoles[0],
+                        'roles' => $remainingRoles,
+                    ]);
+                } else {
+                    $previousAccount->forceFill(['is_active' => false]);
+                }
+                $previousAccount->remember_token = Str::random(60);
+                $previousAccount->save();
+                $invalidateSessions($previousAccount);
+            }
+
+            $admin->forceFill(['roles' => array_values(array_unique([...$admin->assignedRoles(), 'faculty']))])->save();
+            $faculty->user()->associate($admin);
+            $faculty->save();
+        });
+
+        return redirect()->route('admin.faculty.edit', $faculty)
+            ->with('success', 'This instructor profile is now connected to the administrator account. Assignments and request history were retained.');
+    }
+
+    private function facultyHasAcademicRecords(Faculty $faculty): bool
+    {
+        return InstructorAssignment::where('faculty_id', $faculty->id)->exists()
+            || DB::table('subjects')->where('facilitator_id', $faculty->id)->exists()
+            || DB::table('excuse_requests')->where('facilitator_id', $faculty->id)->exists()
+            || DB::table('excuse_request_subject')->where('facilitator_id', $faculty->id)->exists()
+            || DB::table('instructor_acknowledgments')->where('faculty_id', $faculty->id)->exists();
+    }
+
     public function create()
     {
         return view('admin.instructors.create');

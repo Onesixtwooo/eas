@@ -87,6 +87,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/faculty', [InstructorController::class, 'storeAccount'])->name('faculty.store');
         Route::get('/faculty/{faculty}/edit', [InstructorController::class, 'edit'])->name('faculty.edit');
         Route::put('/faculty/{faculty}', [InstructorController::class, 'update'])->name('faculty.update');
+        Route::post('/faculty/{faculty}/reassign-account', [InstructorController::class, 'reassignAccount'])->name('faculty.reassign-account');
         Route::get('/accounts', [UserAccountController::class, 'index'])->name('accounts.index');
         Route::get('/account-archives', [AccountArchiveController::class, 'index'])->name('account-archives.index');
         Route::get('/account-archives/{archive}', [AccountArchiveController::class, 'show'])->name('account-archives.show');

@@ -19,7 +19,7 @@
             <div class="border-t pt-6">
                 <h2 class="font-bold text-[#123A63]">Portal Account</h2>
                 <div class="mt-5 grid gap-5 sm:grid-cols-2">
-                    <div><label for="email">Email address *</label><input id="email" type="email" name="email" value="{{ $faculty->user->email }}" readonly required><p class="mt-1 text-xs text-slate-500">Account email addresses cannot be changed.</p>@error('email')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
+                    <div><label for="email">Email address *</label><input id="email" type="email" name="email" value="{{ $faculty->user->email }}" readonly required><p class="mt-1 text-xs text-slate-500">To use an existing admin login instead, use the account connection form below.</p>@error('email')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
                     <div><label for="is_active">Login status *</label><select id="is_active" name="is_active" required><option value="1" @selected((string) old('is_active', (int) $faculty->user->is_active) === '1')>Active</option><option value="0" @selected((string) old('is_active', (int) $faculty->user->is_active) === '0')>Disabled</option></select>@error('is_active')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
                     <div><label for="password">New password</label><input id="password" type="password" name="password" minlength="8" autocomplete="new-password"><p class="mt-1 text-xs text-slate-500">Leave blank to keep the current password.</p>@error('password')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
                     <div><label for="password_confirmation">Confirm new password</label><input id="password_confirmation" type="password" name="password_confirmation" minlength="8" autocomplete="new-password"></div>
@@ -31,5 +31,17 @@
 
         <div class="flex justify-end gap-3 border-t pt-5"><a href="{{ route('admin.faculty.index') }}" class="rounded-xl border px-5 py-3 font-semibold">Cancel</a><button class="rounded-xl bg-[#123A63] px-5 py-3 font-semibold text-white">Save Changes</button></div>
     </form>
+
+    @if($faculty->user_id)
+        <form method="post" action="{{ route('admin.faculty.reassign-account', $faculty) }}" class="mt-6 space-y-4 rounded-2xl border border-amber-200 bg-white p-6 shadow-sm">
+            @csrf
+            <h2 class="font-bold text-[#123A63]">Connect an existing admin account</h2>
+            <p class="text-sm text-slate-600">Keep this instructor profile, assignments, and request history while switching its portal login. The current faculty-only login will be disabled; accounts with other roles keep those roles. Messages sent by the old login remain attributed to it.</p>
+            <div><label for="admin_email">Admin account email *</label><input id="admin_email" type="email" name="admin_email" value="{{ old('admin_email', auth()->user()->email) }}" required>@error('admin_email')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror</div>
+            <label class="flex items-start gap-3 text-sm text-slate-700"><input type="checkbox" name="confirm_reassignment" value="1" class="mt-1 size-4 w-auto" required><span>I understand that this replaces the current portal login for this instructor.</span></label>
+            @error('confirm_reassignment')<p class="text-sm text-red-600">{{ $message }}</p>@enderror
+            <div class="flex justify-end"><button class="rounded-xl bg-[#123A63] px-5 py-3 font-semibold text-white">Connect admin account</button></div>
+        </form>
+    @endif
 </div>
 @endsection

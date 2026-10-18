@@ -4,6 +4,9 @@ namespace Tests\Feature;
 
 use App\Mail\AdministratorAccountCreated;
 use App\Models\Faculty;
+use App\Models\Course;
+use App\Models\InstructorAssignment;
+use App\Models\Subject;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
@@ -141,6 +144,69 @@ class FacultyAccountTest extends TestCase
         $this->assertSame('Faculty Member', $faculty->fresh()->name);
         $this->actingAs($admin)->get(route('admin.faculty.edit', $faculty))
             ->assertOk()->assertSee('readonly', false);
+    }
+
+    public function test_admin_can_take_over_an_existing_faculty_profile_without_losing_assignments(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'email' => 'admin@example.com', 'is_active' => true]);
+        $oldAccount = User::factory()->create(['role' => 'faculty', 'email' => 'old-faculty@example.com', 'is_active' => true]);
+        $faculty = Faculty::create(['user_id' => $oldAccount->id, 'name' => 'Existing Instructor', 'designation' => 'Instructor']);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'Information Technology']);
+        $subject = Subject::create(['code' => 'IT101', 'name' => 'Programming', 'course_id' => $course->id]);
+        $assignment = InstructorAssignment::create([
+            'faculty_id' => $faculty->id, 'course_id' => $course->id,
+            'subject_id' => $subject->id, 'year_level' => 1, 'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.faculty.reassign-account', $faculty), [
+            'admin_email' => $admin->email,
+            'confirm_reassignment' => '1',
+        ])->assertRedirect(route('admin.faculty.edit', $faculty))->assertSessionHasNoErrors();
+
+        $this->assertSame($admin->id, $faculty->fresh()->user_id);
+        $this->assertSame($faculty->id, $assignment->fresh()->faculty_id);
+        $this->assertSame(['admin', 'faculty'], $admin->fresh()->assignedRoles());
+        $this->assertFalse($oldAccount->fresh()->is_active);
+        $this->assertSame('old-faculty@example.com', $oldAccount->email);
+    }
+
+    public function test_reassignment_rejects_an_admin_with_another_assigned_faculty_profile(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'email' => 'admin@example.com', 'is_active' => true]);
+        $currentAccount = User::factory()->create(['role' => 'faculty', 'is_active' => true]);
+        $faculty = Faculty::create(['user_id' => $currentAccount->id, 'name' => 'Existing Instructor', 'designation' => 'Instructor']);
+        $otherProfile = Faculty::create(['user_id' => $admin->id, 'name' => 'Other Instructor', 'designation' => 'Instructor']);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'Information Technology']);
+        $subject = Subject::create(['code' => 'IT101', 'name' => 'Programming', 'course_id' => $course->id]);
+        InstructorAssignment::create([
+            'faculty_id' => $otherProfile->id, 'course_id' => $course->id,
+            'subject_id' => $subject->id, 'year_level' => 1, 'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)->post(route('admin.faculty.reassign-account', $faculty), [
+            'admin_email' => $admin->email,
+            'confirm_reassignment' => '1',
+        ])->assertSessionHasErrors('admin_email');
+
+        $this->assertSame($currentAccount->id, $faculty->fresh()->user_id);
+        $this->assertTrue($currentAccount->fresh()->is_active);
+        $this->assertDatabaseHas('faculty', ['id' => $otherProfile->id, 'user_id' => $admin->id]);
+    }
+
+    public function test_reassignment_replaces_an_empty_admin_faculty_profile(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'roles' => ['admin', 'faculty'], 'email' => 'admin@example.com', 'is_active' => true]);
+        $emptyProfile = Faculty::create(['user_id' => $admin->id, 'name' => 'Unused Profile', 'designation' => 'Instructor']);
+        $oldAccount = User::factory()->create(['role' => 'faculty', 'is_active' => true]);
+        $assignedProfile = Faculty::create(['user_id' => $oldAccount->id, 'name' => 'Assigned Instructor', 'designation' => 'Instructor']);
+
+        $this->actingAs($admin)->post(route('admin.faculty.reassign-account', $assignedProfile), [
+            'admin_email' => $admin->email,
+            'confirm_reassignment' => '1',
+        ])->assertRedirect(route('admin.faculty.edit', $assignedProfile))->assertSessionHasNoErrors();
+
+        $this->assertDatabaseMissing('faculty', ['id' => $emptyProfile->id]);
+        $this->assertSame($admin->id, $assignedProfile->fresh()->user_id);
     }
 
     public function test_faculty_password_edit_revokes_other_sessions_and_remember_logins(): void
