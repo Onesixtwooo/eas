@@ -132,6 +132,49 @@ class InstructorAssignmentTest extends TestCase
         $this->assertDatabaseHas('instructor_assignments', ['faculty_id' => $instructor->id, 'subject_id' => $subject->id, 'year_level' => 3]);
     }
 
+    public function test_edit_modal_loads_the_assigned_course_and_year_levels(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $instructor = Faculty::create(['name' => 'Maria Reyes']);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
+        $subject = Subject::create(['code' => 'PF101', 'name' => 'Programming Fundamentals', 'course_id' => $course->id]);
+        InstructorAssignment::create(['faculty_id' => $instructor->id, 'course_id' => $course->id, 'subject_id' => $subject->id, 'year_level' => 3]);
+
+        $html = $this->actingAs($admin)->get(route('admin.instructor-assignments.index', [
+            'edit_faculty' => $instructor->id,
+            'edit_course' => $course->id,
+        ]))->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression('/<option value="'.$course->id.'" selected>BSIT/', $html);
+        $this->assertMatchesRegularExpression('/name="year_levels\[\]" value="3"[^>]*checked/', $html);
+        $this->assertMatchesRegularExpression('/<form[^>]*x-data="([^"]*)"/', $html);
+        preg_match('/<form[^>]*x-data="([^"]*)"/', $html, $form);
+        $this->assertStringContainsString("querySelector('input[data-subject-id=' + id + ']')", $form[1]);
+    }
+
+    public function test_edit_with_a_subject_outside_selected_years_returns_to_the_form(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);
+        $instructor = Faculty::create(['name' => 'Maria Reyes']);
+        $course = Course::create(['code' => 'BSIT', 'name' => 'BS Information Technology']);
+        $subject = Subject::create(['code' => 'SPT2', 'name' => 'Mobile Programming', 'course_id' => $course->id, 'year_level' => 4]);
+        $assignment = InstructorAssignment::create(['faculty_id' => $instructor->id, 'course_id' => $course->id, 'subject_id' => $subject->id, 'year_level' => 4]);
+        $editUrl = route('admin.instructor-assignments.index', ['edit_faculty' => $instructor->id, 'edit_course' => $course->id]);
+
+        $this->actingAs($admin)->from($editUrl)
+            ->put(route('admin.instructor-assignments.group-update', [$instructor->id, $course->id]), [
+                'year_levels' => [3],
+                'subject_ids' => [$subject->id],
+                'subject_block_selection_submitted' => 1,
+                'subject_blocks' => [$subject->id => ['all']],
+            ])
+            ->assertRedirect($editUrl)
+            ->assertSessionHasErrors('subject_ids')
+            ->assertSessionHasInput('year_levels', [3]);
+
+        $this->assertDatabaseHas('instructor_assignments', ['id' => $assignment->id, 'year_level' => 4, 'retired_at' => null]);
+    }
+
     public function test_edit_keeps_existing_assignment_and_its_attendance_history(): void
     {
         $admin = User::factory()->create(['role' => 'admin', 'is_active' => true]);

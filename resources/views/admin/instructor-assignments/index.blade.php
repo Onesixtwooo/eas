@@ -16,6 +16,8 @@
     )->all();
     $selectedSubjectIds = old('subject_ids', $editingAssignments->pluck('subject_id')->unique()->values()->all());
     $selectedSubjectBlocks = old('subject_blocks', $editingSubjectBlocks);
+    $selectedCourseId = old('course_id', $editingAssignment?->course_id);
+    $selectedYearLevels = array_map('strval', old('year_levels', old('year_level') ? [old('year_level')] : $editingAssignments->pluck('year_level')->unique()->values()->all()));
 @endphp
 <div x-data="{ instructorModal: @js($errors->has('name') || $errors->has('designation')), assignmentModal: @js($editingAssignment || $errors->has('faculty_id') || $errors->has('course_id') || $errors->has('year_levels') || $errors->hasAny(['subject_blocks', 'subject_blocks.*']) || $errors->has('subject_ids')) }">
     <div class="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
@@ -62,7 +64,7 @@
                 </div>
                 <button type="button" @click="assignmentModal = false" class="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close">&times;</button>
             </div>
-<form method="post" action="{{ $editingAssignment ? route('admin.instructor-assignments.group-update', [$editingAssignment->faculty_id, $editingAssignment->course_id]) : route('admin.instructor-assignments.store') }}" class="mt-5" x-data="{ selectedCourse: '{{ old('course_id', $editingAssignment?->course_id) }}', selectedYears: @js(old('year_levels', old('year_level') ? [old('year_level')] : $editingAssignments->pluck('year_level')->unique()->values()->all())), selectedSubjects: @js(array_map('strval', $selectedSubjectIds)), isYearSelected(year) { return this.selectedYears.includes(String(year)) || this.selectedYears.includes(Number(year)); }, resetSubjects() { this.selectedSubjects = this.selectedSubjects.filter(id => { const input = this.$refs.subjects.querySelector('input[data-subject-id="' + id + '"]'); return input && input.dataset.course === this.selectedCourse && (!input.dataset.year || this.isYearSelected(input.dataset.year)); }); } }">
+<form method="post" action="{{ $editingAssignment ? route('admin.instructor-assignments.group-update', [$editingAssignment->faculty_id, $editingAssignment->course_id]) : route('admin.instructor-assignments.store') }}" class="mt-5" @submit="resetSubjects()" x-data="{ selectedCourse: @js((string) $selectedCourseId), selectedYears: @js($selectedYearLevels), selectedSubjects: @js(array_map('strval', $selectedSubjectIds)), isYearSelected(year) { return this.selectedYears.includes(String(year)); }, resetSubjects() { this.selectedSubjects = this.selectedSubjects.filter(id => { const input = this.$refs.subjects.querySelector('input[data-subject-id=' + id + ']'); return input && input.dataset.course === this.selectedCourse && (!input.dataset.year || this.isYearSelected(input.dataset.year)); }); } }">
     @csrf
     @if($editingAssignment) @method('PUT') @endif
     <input type="hidden" name="subject_block_selection_submitted" value="1">
@@ -92,7 +94,7 @@
             <select name="course_id" x-model="selectedCourse" @change="resetSubjects()" @disabled($editingAssignment) required>
                 <option value="">Select course</option>
                 @foreach($courses as $course)
-                    <option value="{{ $course->id }}">{{ $course->code }} — {{ $course->name }}</option>
+                    <option value="{{ $course->id }}" @selected($selectedCourseId == $course->id)>{{ $course->code }} — {{ $course->name }}</option>
                 @endforeach
             </select>
         </div>
@@ -103,7 +105,7 @@
         <p class="mb-3 text-sm text-slate-500">Select one or more year levels for this instructor.</p>
         <div class="flex flex-wrap gap-3">
             @foreach(range(1, 5) as $year)
-                <label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 hover:border-[#245B8E] hover:bg-blue-50"><input type="checkbox" name="year_levels[]" value="{{ $year }}" x-model="selectedYears" @change="resetSubjects()" class="size-4 w-auto">Year {{ $year }}</label>
+                <label class="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-4 py-3 hover:border-[#245B8E] hover:bg-blue-50"><input type="checkbox" name="year_levels[]" value="{{ $year }}" x-model="selectedYears" @change="resetSubjects()" @checked(in_array((string) $year, $selectedYearLevels, true)) class="size-4 w-auto">Year {{ $year }}</label>
             @endforeach
         </div>
     </div>
@@ -120,7 +122,7 @@
             @foreach($subjects as $subject)
                 <div class="rounded-xl border border-slate-200 p-4 hover:border-[#245B8E]" x-show="selectedCourse == '{{ $subject->course_id }}' && (! '{{ $subject->year_level }}' || isYearSelected('{{ $subject->year_level }}'))" data-subject-card>
                     <label class="flex cursor-pointer items-start gap-3">
-                        <input type="checkbox" name="subject_ids[]" value="{{ $subject->id }}" data-subject-id="{{ $subject->id }}" data-course="{{ $subject->course_id }}" data-year="{{ $subject->year_level }}" x-model="selectedSubjects" class="mt-1 size-4 w-auto">
+                        <input type="checkbox" name="subject_ids[]" value="{{ $subject->id }}" data-subject-id="{{ $subject->id }}" data-course="{{ $subject->course_id }}" data-year="{{ $subject->year_level }}" x-model="selectedSubjects" :disabled="selectedCourse != '{{ $subject->course_id }}' || ('{{ $subject->year_level }}' && !isYearSelected('{{ $subject->year_level }}'))" class="mt-1 size-4 w-auto">
                         <span><b class="text-[#123A63]">{{ $subject->code }}</b><span class="block text-sm text-slate-500">{{ $subject->name }}</span></span>
                     </label>
                     <div class="mt-4 border-t pt-3" x-show="selectedSubjects.includes('{{ $subject->id }}')" x-cloak>
@@ -135,6 +137,7 @@
                 </div>
             @endforeach
         </div>
+        @error('subject_ids')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
         @error('subject_blocks')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
         <p class="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-500" x-show="! selectedCourse || ! selectedYears.length">Choose a course and at least one year level first to see its available subjects.</p>
     </div>

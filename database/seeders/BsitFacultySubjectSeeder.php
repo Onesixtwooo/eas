@@ -32,10 +32,15 @@ class BsitFacultySubjectSeeder extends Seeder
                 ['name' => $row['instructor']],
                 ['designation' => 'Course Facilitator']
             );
-            $subject = Subject::updateOrCreate(
+            $subject = Subject::firstOrCreate(
                 ['code' => $row['code']],
                 ['name' => $row['subject'], 'course_id' => $course->id, 'year_level' => $row['year'], 'is_active' => true]
             );
+
+            // Keep course and year changes made after the initial seed.
+            if ((int) $subject->course_id !== (int) $course->id || (int) $subject->year_level !== $row['year']) {
+                continue;
+            }
 
             $blocks = $row['blocks'] ?? [null];
             foreach ($blocks as $block) {
@@ -43,7 +48,7 @@ class BsitFacultySubjectSeeder extends Seeder
                     ? Section::where('course_id', $course->id)->where('year_level', $row['year'])->where('name', $block)->value('id')
                     : null;
 
-                InstructorAssignment::updateOrCreate([
+                InstructorAssignment::firstOrCreate([
                     'faculty_id' => $faculty->id,
                     'course_id' => $course->id,
                     'subject_id' => $subject->id,

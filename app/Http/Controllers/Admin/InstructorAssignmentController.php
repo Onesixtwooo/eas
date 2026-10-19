@@ -116,7 +116,11 @@ class InstructorAssignmentController extends Controller
             })
             ->get();
 
-        abort_unless($subjects->count() === count($data['subject_ids']), 422, 'Every selected subject must belong to the selected course and one of the selected year levels.');
+        if ($subjects->count() !== count($data['subject_ids'])) {
+            return back()->withErrors([
+                'subject_ids' => 'Every selected subject must belong to the selected course and one of the selected year levels.',
+            ])->withInput();
+        }
 
         $sections = Section::where('course_id', $data['course_id'])
             ->whereIn('year_level', $yearLevels)
