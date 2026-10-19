@@ -13,7 +13,8 @@
 <div class="row"><span class="label">Student</span><strong>{{ $issued['student_name'] ?? $archive->records['student_user']['name'] ?? 'Former student' }}</strong></div>
 <div class="row"><span class="label">Student number</span>{{ $issued['student_number'] ?? $archive->records['student']['student_number'] ?? '' }}</div>
 <div class="row"><span class="label">Subject</span>{{ $issued ? implode(', ', $issued['subject_codes']) : ($archive->records['subject']['name'] ?? '') }}</div>
-<div class="row"><span class="label">Absence date</span>{{ $issued['absence_date'] ?? $archive->records['request']['absence_date'] ?? '' }}</div>
+<div class="row"><span class="label">Attendance</span>{{ ucfirst($issued['attendance_type'] ?? $archive->records['request']['attendance_type'] ?? 'absent') }}</div>
+<div class="row"><span class="label">Date</span>{{ $issued['absence_date'] ?? $archive->records['request']['absence_date'] ?? '' }}</div>
 <div class="row"><span class="label">Status</span>{{ ucfirst($archive->status) }}</div>
 <div class="row"><span class="label">{{ $reconstructed ? 'Recorded initial result' : 'Original issued result' }}</span>{{ $issued['slip_remark'] ?? $archive->records['request']['slip_remark'] ?? '' }}</div>
 <div class="row"><span class="label">Current official result</span>{{ $valid ? ($latestAmendment['slip_remark'] ?? $issued['slip_remark'] ?? $archive->records['request']['slip_remark'] ?? '') : 'REVOKED' }}</div>

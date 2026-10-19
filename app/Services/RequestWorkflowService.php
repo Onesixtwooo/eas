@@ -106,6 +106,7 @@ class RequestWorkflowService
             'student_number' => $request->student->student_number,
             'reason_name' => $request->reasonCategory->name,
             'absence_date' => $request->absence_date->toDateString(),
+            'attendance_type' => $request->attendance_type ?? 'absent',
             'start_time' => $request->start_time,
             'subject_codes' => $subjects->pluck('code')->all(),
             'facilitator_names' => $faculty->pluck('user.name')->filter()->unique()->values()->all(),

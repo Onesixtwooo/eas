@@ -16,6 +16,7 @@
         $reconstructed = ($issued['snapshot_source'] ?? null) !== 'captured';
         $issuedAt = $issued && $issued['issued_at'] ? \Illuminate\Support\Carbon::parse($issued['issued_at']) : $item->approved_at;
         $absenceDate = $issued ? \Illuminate\Support\Carbon::parse($issued['absence_date']) : $item->absence_date;
+        $attendanceType = $issued['attendance_type'] ?? $item->attendance_type ?? 'absent';
         $slipSubjects = $item->subjects->isNotEmpty() ? $item->subjects : collect([$item->subject]);
         $slipFacilitators = $item->facilitators->isNotEmpty() ? $item->facilitators : collect([$item->facilitator]);
         $recipientLines = $item->subjects->isNotEmpty()
@@ -69,12 +70,12 @@
         <p>Dear <strong>Sir/Madam:</strong></p>
 
         <p class="sentence">
-            I was absent from your class due to
+            I was {{ $attendanceType === 'late' ? 'late to' : 'absent from' }} your class due to
             <span class="fill-line reason-line">{{ $issued['reason_name'] ?? $item->reasonCategory->name }}</span>.
         </p>
 
         <p class="sentence request-line">
-            In this connection, please excuse me for failing to attend your class
+            In this connection, please excuse me for {{ $attendanceType === 'late' ? 'arriving late to' : 'failing to attend' }} your class
             <span class="fill-line class-line">{{ $issued ? implode(', ', $issued['subject_codes']) : $slipSubjects->pluck('code')->join(', ') }}</span>
             last
             <span class="fill-line absence-line">{{ $absenceDate->format('F d, Y') }}</span>.

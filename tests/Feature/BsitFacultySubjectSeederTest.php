@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\InstructorAssignment;
 use App\Models\Section;
+use App\Models\Subject;
 use Database\Seeders\BsitFacultySubjectSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -29,5 +30,15 @@ class BsitFacultySubjectSeederTest extends TestCase
 
         $this->assertSame('Mr. Odiether A. Catabona', $assignmentA->faculty->name);
         $this->assertSame('Mr. Vladimir B. Figueroa', $assignmentB->faculty->name);
+
+        foreach (['MM101', 'SA101', 'SP102'] as $code) {
+            $subject = Subject::where('code', $code)->firstOrFail();
+            $this->assertSame(4, $subject->year_level);
+            $this->assertDatabaseHas('instructor_assignments', [
+                'subject_id' => $subject->id,
+                'year_level' => 4,
+                'is_active' => true,
+            ]);
+        }
     }
 }

@@ -31,7 +31,7 @@
                                 <div class="shrink-0">@include('requests._badge', ['status' => $item->status])</div>
                             </div>
                             <dl class="mt-4 grid grid-cols-2 gap-4 border-y border-slate-100 py-4 text-sm">
-                                <div><dt class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Absence date</dt><dd class="mt-1 font-semibold text-slate-800">{{ $item->absence_date->format('M d, Y') }}</dd><dd class="mt-1 text-xs text-slate-500">{{ $item->placementLabel() }}</dd></div>
+                                <div><dt class="text-[11px] font-bold uppercase tracking-wide text-slate-400">{{ ucfirst($item->attendance_type ?? 'absent') }} date</dt><dd class="mt-1 font-semibold text-slate-800">{{ $item->absence_date->format('M d, Y') }}</dd><dd class="mt-1 text-xs text-slate-500">{{ $item->placementLabel() }}</dd></div>
                                 <div><dt class="text-[11px] font-bold uppercase tracking-wide text-slate-400">Covered classes</dt><dd class="mt-1"><button type="button" onclick="document.getElementById('covered-classes-{{ $item->id }}').showModal()" class="font-semibold text-[#245B8E]">{{ $rowSubjects->count() }} {{ Str::plural('class', $rowSubjects->count()) }} &rarr;</button></dd></div>
                             </dl>
                             <a href="{{ route('requests.show', $item) }}" class="mt-4 block w-full rounded-xl bg-[#123A63] px-4 py-2.5 text-center text-sm font-semibold text-white">View Request</a>
@@ -41,13 +41,13 @@
 
                 <div class="hidden overflow-x-auto rounded-xl border border-slate-200 bg-white md:block">
                     <table class="w-full min-w-[760px] text-left text-sm">
-                        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-3">Reference</th><th class="px-4 py-3">Absence date</th><th class="px-4 py-3">Covered classes</th><th class="px-4 py-3">Status</th><th class="px-4 py-3"><span class="sr-only">Action</span></th></tr></thead>
+                        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th class="px-4 py-3">Reference</th><th class="px-4 py-3">Attendance date</th><th class="px-4 py-3">Covered classes</th><th class="px-4 py-3">Status</th><th class="px-4 py-3"><span class="sr-only">Action</span></th></tr></thead>
                         <tbody class="divide-y divide-slate-200">
                             @foreach($student->requests as $item)
                                 @php($rowSubjects = $item->subjects->isNotEmpty() ? $item->subjects : collect([$item->subject]))
                                 <tr class="hover:bg-slate-50">
                                     <td class="px-4 py-4 align-top font-semibold text-[#123A63]">{{ $item->reference_number ?? 'Awaiting reference' }}<span class="mt-1 block text-xs font-normal text-slate-500">{{ $item->placementLabel() }}</span><span class="mt-1 block text-xs font-normal text-slate-500">Submitted {{ $item->submitted_at?->format('M d, Y') ?? 'Not submitted' }}</span></td>
-                                    <td class="px-4 py-4 align-top font-medium text-slate-800">{{ $item->absence_date->format('M d, Y') }}</td>
+                                    <td class="px-4 py-4 align-top font-medium text-slate-800">{{ ucfirst($item->attendance_type ?? 'absent') }} {{ $item->absence_date->format('M d, Y') }}</td>
                                     <td class="px-4 py-4 align-top"><button type="button" onclick="document.getElementById('covered-classes-{{ $item->id }}').showModal()" class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 font-semibold text-[#123A63] hover:bg-white">{{ $rowSubjects->count() }} {{ Str::plural('class', $rowSubjects->count()) }} <span aria-hidden="true">&rarr;</span></button></td>
                                     <td class="px-4 py-4 align-top">@include('requests._badge', ['status' => $item->status])</td>
                                     <td class="px-4 py-4 text-right align-top"><a class="inline-flex rounded-lg border border-slate-200 px-3 py-2 font-semibold text-[#245B8E] hover:bg-white" href="{{ route('requests.show', $item) }}">View</a></td>

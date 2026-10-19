@@ -63,7 +63,7 @@ class BsitFacultySubjectSeeder extends Seeder
     {
         return [
             ['instructor'=>'Mr. Jerick C. Barnatia','code'=>'FL101','subject'=>'Foreign Language','year'=>4],
-            ['instructor'=>'Mr. Jerick C. Barnatia','code'=>'MM101','subject'=>'Multimedia Systems','year'=>3],
+            ['instructor'=>'Mr. Jerick C. Barnatia','code'=>'MM101','subject'=>'Multimedia Systems','year'=>4],
             ['instructor'=>'Ms. Princess Lea Ann D. Calina, MSIT','code'=>'CC101','subject'=>'Introduction to Computing','year'=>1],
             ['instructor'=>'Ms. Princess Lea Ann D. Calina, MSIT','code'=>'GE12','subject'=>'The Entrepreneurial Mind for Information Technology','year'=>4],
             ['instructor'=>'Mr. Odiether A. Catabona','code'=>'CC105','subject'=>'Information Management','year'=>2],
@@ -79,7 +79,7 @@ class BsitFacultySubjectSeeder extends Seeder
             ['instructor'=>'Mr. Vladimir B. Figueroa','code'=>'IAS101','subject'=>'Information Assurance and Security 1','year'=>3],
             ['instructor'=>'Mr. Vladimir B. Figueroa','code'=>'SPT1','subject'=>'Specialization 1: Cybersecurity','year'=>4],
             ['instructor'=>'Mr. Vladimir B. Figueroa','code'=>'CC106','subject'=>'Application Development and Emerging Technologies','year'=>3,'blocks'=>['B']],
-            ['instructor'=>'Mr. Vladimir B. Figueroa','code'=>'SA101','subject'=>'Systems Administration and Maintenance','year'=>3],
+            ['instructor'=>'Mr. Vladimir B. Figueroa','code'=>'SA101','subject'=>'Systems Administration and Maintenance','year'=>4],
             ['instructor'=>'Mrs. Rose Ann Jade V. Gloria','code'=>'GE8','subject'=>'Art Appreciation','year'=>2],
             ['instructor'=>'Mrs. Rose Ann Jade V. Gloria','code'=>'GE10','subject'=>'Readings in Philippine History with Indigenous People','year'=>2],
             ['instructor'=>'Ms. Madel Meriales','code'=>'PE1','subject'=>'Movement Competency Training','year'=>1],
@@ -100,7 +100,7 @@ class BsitFacultySubjectSeeder extends Seeder
             ['instructor'=>'Mr. Joel P. Altura','code'=>'ENGPLUS','subject'=>'English for Information Technology','year'=>1],
             ['instructor'=>'Mr. Joel P. Altura','code'=>'WS102','subject'=>'Web Systems and Technologies 2','year'=>3],
             ['instructor'=>'Mr. Joel P. Altura','code'=>'SPT2','subject'=>'Fundamentals of Mobile Programming','year'=>4],
-            ['instructor'=>'Mr. Joel P. Altura','code'=>'SP102','subject'=>'Social and Professional Issues 2','year'=>3],
+            ['instructor'=>'Mr. Joel P. Altura','code'=>'SP102','subject'=>'Social and Professional Issues 2','year'=>4],
         ];
     }
 }

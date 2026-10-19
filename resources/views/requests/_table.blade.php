@@ -23,7 +23,7 @@
                 <td class="request-col-ref px-5 py-4 align-top font-semibold text-[#123A63]"><span class="break-words">{{ $item->reference_number ?? 'Pending' }}</span><span class="mt-1 block text-xs font-normal text-slate-500">{{ $item->placementLabel() }}</span></td>
                 @unless($studentView)<td class="request-col-student px-5 py-4 align-top"><b class="block text-slate-800">{{ $item->student->user->name }}</b><span class="mt-1 block text-xs text-slate-500">{{ $item->student->student_number }}</span></td>@endunless
                 <td class="request-col-dates px-5 py-4 align-top">
-                    <span class="block font-medium text-slate-800">Absent {{ $item->absence_date->format('M d, Y') }}</span>
+                    <span class="block font-medium text-slate-800">{{ ucfirst($item->attendance_type ?? 'absent') }} {{ $item->absence_date->format('M d, Y') }}</span>
                     <span class="mt-1 block text-xs text-slate-500">Submitted {{ $item->submitted_at?->format('M d, Y') ?? '—' }}</span>
                 </td>
                 <td class="request-col-classes px-5 py-4 align-top">

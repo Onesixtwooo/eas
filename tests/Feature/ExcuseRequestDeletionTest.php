@@ -389,6 +389,42 @@ class ExcuseRequestDeletionTest extends TestCase
             ->assertSee('Second Covered Class');
     }
 
+    public function test_student_can_choose_late_and_it_appears_on_the_issued_slip(): void
+    {
+        [$existing, $studentUser] = $this->makeRequest();
+        $existing->update(['status' => 'cancelled']);
+        $input = [
+            'attendance_type' => 'late',
+            'absence_date' => now()->toDateString(),
+            'subject_ids' => [$existing->subject_id],
+            'reason_category_id' => $existing->reason_category_id,
+            'explanation' => 'I arrived late because of a transport delay.',
+            'declaration' => '1',
+            'intent' => 'submit',
+        ];
+
+        $this->actingAs($studentUser)->post(route('requests.store'), $input)
+            ->assertSessionHasNoErrors();
+        $request = ExcuseRequest::where('student_id', $existing->student_id)->where('status', 'submitted')->firstOrFail();
+        $this->assertSame('late', $request->attendance_type);
+
+        $this->patch(route('requests.update', $request), array_merge($input, ['attendance_type' => 'absent']))
+            ->assertSessionHasNoErrors();
+        $this->assertSame('absent', $request->fresh()->attendance_type);
+        $this->patch(route('requests.update', $request), $input)
+            ->assertSessionHasNoErrors();
+        $this->assertSame('late', $request->fresh()->attendance_type);
+
+        $request->update(['status' => 'approved', 'approved_at' => now(), 'reference_number' => 'LATE-TEST-1']);
+        $request->slipIssuance()->create([
+            'snapshot' => app(\App\Services\RequestWorkflowService::class)->slipSnapshot($request),
+        ]);
+        $this->get(route('requests.slip', $request))
+            ->assertOk()
+            ->assertSee('I was late to your class due to')
+            ->assertSee('arriving late to');
+    }
+
     private function makeRequest(): array
     {
         $studentUser = User::factory()->create(['role' => 'student', 'is_active' => true]);

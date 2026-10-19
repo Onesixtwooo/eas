@@ -52,7 +52,8 @@
                 @foreach([
                     ['Reference number', $item->reference_number],
                     ['Student name', $issued['student_name'] ?? $item->student->user->name],
-                    ['Date of absence', $issued ? \Illuminate\Support\Carbon::parse($issued['absence_date'])->format('F d, Y') : $item->absence_date->format('F d, Y')],
+                    ['Attendance', ucfirst($issued['attendance_type'] ?? $item->attendance_type ?? 'absent')],
+                    ['Date', $issued ? \Illuminate\Support\Carbon::parse($issued['absence_date'])->format('F d, Y') : $item->absence_date->format('F d, Y')],
                     ['Subjects', $issued ? implode(', ', $issued['subject_codes']) : $subjects->pluck('code')->join(', ')],
                     ['Course facilitators', $issued ? implode(', ', $issued['facilitator_names']) : $facilitators->pluck('user.name')->filter()->unique()->join(', ')],
                     ['Current status', ucwords(str_replace('_', ' ', $item->status))],

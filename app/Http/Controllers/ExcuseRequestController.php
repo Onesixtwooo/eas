@@ -339,7 +339,7 @@ class ExcuseRequestController extends Controller
         if (! $r->has('subject_ids') && $r->filled('subject_id')) {
             $r->merge(['subject_ids' => [$r->input('subject_id')]]);
         }
-        $data = $r->validate(['absence_date' => 'required|date|before_or_equal:today', 'subject_ids' => 'required|array|min:1', 'subject_ids.*' => 'integer|distinct|exists:subjects,id', 'reason_category_id' => 'required|exists:reason_categories,id', 'explanation' => 'required|string|min:20|max:3000', 'start_time' => 'nullable|date_format:H:i', 'end_time' => 'nullable|date_format:H:i|after:start_time', 'guardian_name' => 'nullable|string|max:255', 'guardian_contact' => 'nullable|string|max:30', 'document' => 'prohibited']);
+        $data = $r->validate(['attendance_type' => 'sometimes|required|in:absent,late', 'absence_date' => 'required|date|before_or_equal:today', 'subject_ids' => 'required|array|min:1', 'subject_ids.*' => 'integer|distinct|exists:subjects,id', 'reason_category_id' => 'required|exists:reason_categories,id', 'explanation' => 'required|string|min:20|max:3000', 'start_time' => 'nullable|date_format:H:i', 'end_time' => 'nullable|date_format:H:i|after:start_time', 'guardian_name' => 'nullable|string|max:255', 'guardian_contact' => 'nullable|string|max:30', 'document' => 'prohibited']);
         $subjectIds = collect($data['subject_ids'])->map(fn ($id) => (int) $id)->values();
         $assignments = $this->assignmentsFor($student)->whereIn('subject_id', $subjectIds)->keyBy('subject_id');
         if ($assignments->count() !== $subjectIds->count()) {
