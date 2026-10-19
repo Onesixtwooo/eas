@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Mail\StudentRegistrationOtp;
+use App\Mail\StudentEmailVerificationCode;
 use App\Models\Course;
 use App\Models\Section;
 use App\Models\Student;
@@ -39,6 +40,37 @@ class StudentRegistrationFlowTest extends TestCase
         $this->postJson(route('register.send-otp'), ['email' => 'student@example.com'])->assertOk();
         Mail::assertSent(StudentRegistrationOtp::class, fn ($mail) => $mail->hasTo('student@example.com')
             && strlen($mail->otp) === 6);
+    }
+
+    public function test_verification_resend_limit_returns_to_the_form_with_a_retry_message(): void
+    {
+        Mail::fake();
+        $student = User::factory()->create(['role' => 'student', 'is_active' => true]);
+        $url = route('register.verify-email.resend');
+
+        $this->withSession(['email_verification_user_id' => $student->id])->post($url)->assertRedirect();
+        $this->post($url)->assertRedirect();
+        $this->post($url)
+            ->assertRedirect(route('register.verify-email'))
+            ->assertSessionHas('error')
+            ->assertHeader('Retry-After');
+
+        Mail::assertSent(StudentEmailVerificationCode::class, 2);
+    }
+
+    public function test_verification_resend_limit_is_separate_for_students_on_the_same_ip(): void
+    {
+        Mail::fake();
+        $first = User::factory()->create(['role' => 'student', 'is_active' => true]);
+        $second = User::factory()->create(['role' => 'student', 'is_active' => true]);
+        $url = route('register.verify-email.resend');
+
+        $this->withSession(['email_verification_user_id' => $first->id])->post($url)->assertRedirect();
+        $this->post($url)->assertRedirect();
+        $this->withSession(['email_verification_user_id' => $second->id])->post($url)
+            ->assertRedirect()->assertSessionHas('success');
+
+        Mail::assertSent(StudentEmailVerificationCode::class, 3);
     }
 
     public function test_self_registered_student_waits_for_admin_approval(): void

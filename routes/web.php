@@ -31,7 +31,7 @@ Route::middleware('guest')->group(function () {
     Route::post('/register/send-otp', [RegistrationController::class, 'sendOtp'])->middleware('throttle:2,1')->name('register.send-otp');
     Route::get('/register/verify-email', [StudentEmailVerificationController::class, 'show'])->name('register.verify-email');
     Route::post('/register/verify-email', [StudentEmailVerificationController::class, 'verify'])->middleware('throttle:10,1')->name('register.verify-email.store');
-    Route::post('/register/verify-email/resend', [StudentEmailVerificationController::class, 'resend'])->middleware('throttle:2,1')->name('register.verify-email.resend');
+    Route::post('/register/verify-email/resend', [StudentEmailVerificationController::class, 'resend'])->middleware('throttle:verification-resend')->name('register.verify-email.resend');
     Route::get('/forgot-password', [AuthController::class, 'forgot'])->name('password.request');
     Route::post('/forgot-password', [AuthController::class, 'emailReset'])->middleware('throttle:5,1')->name('password.email');
     Route::get('/reset-password/{token}', [AuthController::class, 'reset'])->name('password.reset');
